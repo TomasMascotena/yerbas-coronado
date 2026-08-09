@@ -205,3 +205,11 @@ La Especificación del Dominio v3.2 congelada ubicada en:
 es la fuente de verdad para todas las reglas de negocio.
 
 Antes de implementar una funcionalidad de dominio, consultar las secciones relevantes de ese documento.
+
+Las decisiones aprobadas que completen aspectos no definidos explícitamente
+por la especificación se registran en:
+
+`docs/technical/DECISIONES_IMPLEMENTACION.md`
+
+Estas decisiones pueden completar huecos de implementación, pero nunca
+contradecir la Especificación del Dominio.
