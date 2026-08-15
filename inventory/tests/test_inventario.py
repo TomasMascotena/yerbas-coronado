@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
+from catalog.models import Producto
 from catalog.services import crear_producto_con_inventario
 from catalog.tests.helpers import datos_producto
 from inventory.models import Inventario
@@ -20,7 +21,9 @@ def tearDownModule():
 @override_settings(MEDIA_ROOT=MEDIA_ROOT_PRUEBAS)
 class InventarioTests(TestCase):
     def setUp(self):
-        self.producto = crear_producto_con_inventario(**datos_producto())
+        self.producto = crear_producto_con_inventario(
+            producto=Producto(**datos_producto())
+        )
 
     def test_rechaza_cantidad_negativa_en_aplicacion(self):
         inventario = self.producto.inventario
