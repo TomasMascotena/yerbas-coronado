@@ -23,7 +23,9 @@ def tearDownModule():
 @override_settings(MEDIA_ROOT=MEDIA_ROOT_PRUEBAS)
 class CrearProductoConInventarioTests(TestCase):
     def test_crea_producto_valido_activo_con_un_inventario_en_cero(self):
-        producto = crear_producto_con_inventario(**datos_producto())
+        producto = crear_producto_con_inventario(
+            producto=Producto(**datos_producto())
+        )
 
         producto.refresh_from_db()
         self.assertTrue(producto.activo)
@@ -33,17 +35,21 @@ class CrearProductoConInventarioTests(TestCase):
 
     def test_descripcion_es_opcional(self):
         producto = crear_producto_con_inventario(
-            **datos_producto(descripcion="")
+            producto=Producto(**datos_producto(descripcion=""))
         )
 
         self.assertEqual(producto.descripcion, "")
 
     def test_rechaza_nombre_y_peso_duplicados(self):
-        crear_producto_con_inventario(**datos_producto())
+        crear_producto_con_inventario(producto=Producto(**datos_producto()))
 
         with self.assertRaises(ValidationError):
             crear_producto_con_inventario(
-                **datos_producto(imagen=imagen_de_prueba("duplicado.gif"))
+                producto=Producto(
+                    **datos_producto(
+                        imagen=imagen_de_prueba("duplicado.gif")
+                    )
+                )
             )
 
     def test_la_base_de_datos_rechaza_nombre_y_peso_duplicados(self):
@@ -55,24 +61,28 @@ class CrearProductoConInventarioTests(TestCase):
             )
 
     def test_permite_mismo_nombre_con_distinto_peso(self):
-        crear_producto_con_inventario(**datos_producto())
+        crear_producto_con_inventario(producto=Producto(**datos_producto()))
 
         crear_producto_con_inventario(
-            **datos_producto(
-                peso="500 gr",
-                imagen=imagen_de_prueba("otro-peso.gif"),
+            producto=Producto(
+                **datos_producto(
+                    peso="500 gr",
+                    imagen=imagen_de_prueba("otro-peso.gif"),
+                )
             )
         )
 
         self.assertEqual(Producto.objects.count(), 2)
 
     def test_permite_distinto_nombre_con_mismo_peso(self):
-        crear_producto_con_inventario(**datos_producto())
+        crear_producto_con_inventario(producto=Producto(**datos_producto()))
 
         crear_producto_con_inventario(
-            **datos_producto(
-                nombre="Baldo",
-                imagen=imagen_de_prueba("otro-nombre.gif"),
+            producto=Producto(
+                **datos_producto(
+                    nombre="Baldo",
+                    imagen=imagen_de_prueba("otro-nombre.gif"),
+                )
             )
         )
 
@@ -80,14 +90,18 @@ class CrearProductoConInventarioTests(TestCase):
 
     def test_imagen_es_obligatoria(self):
         with self.assertRaises(ValidationError):
-            crear_producto_con_inventario(**datos_producto(imagen=None))
+            crear_producto_con_inventario(
+                producto=Producto(**datos_producto(imagen=None))
+            )
 
     def test_no_impone_relacion_matematica_entre_los_precios(self):
         producto = crear_producto_con_inventario(
-            **datos_producto(
-                precio_unitario=Decimal("100.00"),
-                precio_desde_3=Decimal("300.00"),
-                precio_desde_20=Decimal("200.00"),
+            producto=Producto(
+                **datos_producto(
+                    precio_unitario=Decimal("100.00"),
+                    precio_desde_3=Decimal("300.00"),
+                    precio_desde_20=Decimal("200.00"),
+                )
             )
         )
 
@@ -98,7 +112,9 @@ class CrearProductoConInventarioTests(TestCase):
     def test_hace_rollback_del_producto_si_falla_el_inventario(self):
         with patch.object(Inventario, "save", side_effect=RuntimeError):
             with self.assertRaises(RuntimeError):
-                crear_producto_con_inventario(**datos_producto())
+                crear_producto_con_inventario(
+                    producto=Producto(**datos_producto())
+                )
 
         self.assertFalse(Producto.objects.exists())
         self.assertFalse(Inventario.objects.exists())
@@ -108,7 +124,9 @@ class CrearProductoConInventarioTests(TestCase):
 class RestriccionesDePrecioTests(TestCase):
     def assert_precio_invalido(self, campo, valor):
         with self.assertRaises(ValidationError):
-            crear_producto_con_inventario(**datos_producto(**{campo: valor}))
+            crear_producto_con_inventario(
+                producto=Producto(**datos_producto(**{campo: valor}))
+            )
 
     def test_rechaza_precio_unitario_cero_o_negativo(self):
         for valor in (Decimal("0.00"), Decimal("-1.00")):
