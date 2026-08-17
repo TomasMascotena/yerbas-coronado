@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 
 from catalog.models import Producto
 from catalog.services import crear_producto_con_inventario
@@ -17,7 +19,10 @@ class ProductoAdmin(admin.ModelAdmin):
     )
     search_fields = ("nombre", "peso")
     list_filter = ("activo",)
-    readonly_fields = ("cantidad_disponible_actual",)
+    readonly_fields = (
+        "cantidad_disponible_actual",
+        "administrar_inventario",
+    )
     actions = ("activar_productos", "inactivar_productos")
 
     def get_queryset(self, request):
@@ -28,6 +33,16 @@ class ProductoAdmin(admin.ModelAdmin):
         if obj is None:
             return "-"
         return obj.inventario.cantidad_disponible
+
+    @admin.display(description="Inventario")
+    def administrar_inventario(self, obj):
+        if obj is None:
+            return "-"
+        url = reverse(
+            "admin:inventory_inventario_change",
+            args=(obj.inventario.pk,),
+        )
+        return format_html('<a href="{}">Ver Inventario</a>', url)
 
     def save_model(self, request, obj, form, change):
         if change:

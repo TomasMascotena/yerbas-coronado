@@ -59,10 +59,14 @@ class ProductoAdminTests(TestCase):
         datos.update(cambios)
         return datos
 
-    def test_producto_esta_registrado_e_inventario_no_esta_expuesto(self):
+    def test_producto_esta_registrado_e_inventario_no_es_crud_editable(self):
         self.assertTrue(admin.site.is_registered(Producto))
         self.assertIsInstance(self.producto_admin, ProductoAdmin)
-        self.assertFalse(admin.site.is_registered(Inventario))
+        self.assertTrue(admin.site.is_registered(Inventario))
+        inventario_admin = admin.site._registry[Inventario]
+        self.assertFalse(inventario_admin.has_add_permission(self.request))
+        self.assertFalse(inventario_admin.has_change_permission(self.request))
+        self.assertFalse(inventario_admin.has_delete_permission(self.request))
 
     def test_administradora_puede_acceder_al_listado(self):
         response = self.client.get(self.lista_url)

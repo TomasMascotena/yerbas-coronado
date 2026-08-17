@@ -39,3 +39,29 @@ Decisión adoptada:
   pero no están disponibles mediante los servicios públicos del Módulo 2A.
 
 Esta omisión temporal no modifica el modelo de dominio final.
+
+## DI-003 — Inventario de Productos inactivos
+
+**Estado:** Aprobada
+
+Las operaciones administrativas de Inventario están permitidas sobre
+Productos activos e inactivos.
+
+La inactivación de un Producto afecta su disponibilidad comercial, pero no
+elimina ni congela automáticamente su Inventario. Los movimientos de
+Inventario no modifican el atributo `activo` del Producto.
+
+## DI-004 — Configuración regional de la administración
+
+**Estado:** Aprobada
+
+La administración de Yerbas Coronado utiliza la siguiente configuración
+regional:
+
+- `LANGUAGE_CODE = "es-ar"`;
+- `TIME_ZONE = "America/Argentina/Buenos_Aires"`;
+- `USE_I18N = True`;
+- `USE_TZ = True`.
+
+Las fechas se almacenan con soporte timezone-aware y Django realiza su
+presentación en la zona horaria configurada.
