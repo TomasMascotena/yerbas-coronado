@@ -1,0 +1,12 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  {% if puede_operar_inventario and original %}
+    <li><a href="{% url 'admin:inventory_inventario_ingreso_mercaderia' original.pk %}">Ingresar mercadería</a></li>
+    <li><a href="{% url 'admin:inventory_inventario_venta_presencial' original.pk %}">Registrar venta presencial</a></li>
+    <li><a href="{% url 'admin:inventory_inventario_ajuste_positivo' original.pk %}">Ajuste positivo</a></li>
+    <li><a href="{% url 'admin:inventory_inventario_ajuste_negativo' original.pk %}">Ajuste negativo</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:inventory_inventario_changelist' %}">Inventarios</a>
+    &rsaquo; <a href="{% url 'admin:inventory_inventario_change' inventario.pk %}">{{ inventario.producto.nombre }}</a>
+    &rsaquo; {{ title }}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <fieldset class="module aligned">
+      <div class="form-row"><strong>Producto:</strong> {{ inventario.producto.nombre }}</div>
+      <div class="form-row"><strong>Peso:</strong> {{ inventario.producto.peso }}</div>
+      <div class="form-row"><strong>Stock actual:</strong> {{ inventario.cantidad_disponible }}</div>
+      <div class="form-row"><strong>Activo:</strong> {{ inventario.producto.activo|yesno:"Sí,No" }}</div>
+    </fieldset>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.as_div }}
+      <div class="submit-row">
+        <input type="submit" value="Registrar" class="default">
+      </div>
+    </form>
+  </div>
+{% endblock %}
