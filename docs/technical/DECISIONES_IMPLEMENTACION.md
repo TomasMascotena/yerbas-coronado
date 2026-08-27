@@ -65,3 +65,28 @@ regional:
 
 Las fechas se almacenan con soporte timezone-aware y Django realiza su
 presentación en la zona horaria configurada.
+
+## DI-005 — Persistencia e identificación del Carrito
+
+**Estado:** Aprobada
+
+`Carrito` e `ItemCarrito` se persisten en PostgreSQL. La sesión estándar de
+Django identifica al Visitante mediante su `session_key`, pero no almacena la
+información comercial del Carrito ni se representa mediante una clave foránea
+obligatoria a la tabla de sesiones.
+
+Una sesión posee como máximo un Carrito persistido y la restricción única
+sobre `session_key` constituye la defensa definitiva ante creaciones
+concurrentes.
+
+## DI-006 — Expiración diferida del Carrito
+
+**Estado:** Aprobada
+
+Un Carrito expira cuando transcurren seis horas o más desde su
+`ultima_actividad`. La expiración se aplica de forma diferida al acceder al
+Carrito: se elimina junto con sus Items y no se modifica Inventario ni se crean
+Movimientos de Inventario.
+
+Las consultas de solo lectura no renuevan el plazo. `ultima_actividad` se
+actualiza únicamente cuando una operación modifica efectivamente el Carrito.
