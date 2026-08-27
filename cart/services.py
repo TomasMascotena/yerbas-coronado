@@ -12,6 +12,7 @@ from cart.exceptions import (
     StockInsuficienteParaCarrito,
 )
 from cart.models import Carrito, ItemCarrito
+from cart.pricing import calcular_resumen
 from catalog.models import Producto
 from inventory.models import Inventario
 
@@ -246,3 +247,29 @@ def vaciar_carrito(session_key):
     if eliminados:
         _actualizar_actividad(carrito, ahora=_ahora())
     return carrito
+
+
+def obtener_resumen_carrito(session_key):
+    _validar_session_key(session_key)
+    carrito = Carrito.objects.filter(session_key=session_key).first()
+    if carrito is None:
+        return calcular_resumen(carrito_id=None, items=())
+
+    if _esta_expirado(carrito, _ahora()):
+        carrito = obtener_carrito_vigente(session_key)
+        if carrito is None:
+            return calcular_resumen(carrito_id=None, items=())
+
+    items = list(
+        ItemCarrito.objects.filter(carrito=carrito)
+        .only(
+            "id",
+            "producto_id",
+            "cantidad",
+            "precio_unitario_snapshot",
+            "precio_desde_3_snapshot",
+            "precio_desde_20_snapshot",
+        )
+        .order_by("pk")
+    )
+    return calcular_resumen(carrito_id=carrito.pk, items=items)

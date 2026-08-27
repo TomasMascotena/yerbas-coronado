@@ -90,3 +90,18 @@ Movimientos de Inventario.
 
 Las consultas de solo lectura no renuevan el plazo. `ultima_actividad` se
 actualiza únicamente cuando una operación modifica efectivamente el Carrito.
+
+## DI-007 — Cálculos derivados del Carrito
+
+**Estado:** Aprobada
+
+La Escala de Precio se calcula dinámicamente utilizando la cantidad total de
+unidades del Carrito. Todos los Items comparten una única escala global y el
+precio aplicado a cada uno proviene exclusivamente del snapshot correspondiente
+almacenado en el Item.
+
+Los subtotales, el importe total y la escala aplicada son valores derivados y
+no se persisten. Todos los cálculos monetarios utilizan `Decimal`.
+
+Un Carrito vacío no posee una escala aplicable y su importe total es
+`Decimal("0.00")`.
