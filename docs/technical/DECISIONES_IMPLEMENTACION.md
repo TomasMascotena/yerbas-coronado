@@ -139,3 +139,69 @@ La preparación del Carrito no reserva ni modifica Inventario y no crea
 Movimientos de Inventario. La disponibilidad observada se valida de forma
 preventiva mediante los servicios y deberá volver a validarse al generar el
 Pedido.
+
+## DI-009 — Versión e idempotencia del Checkout
+
+**Estado:** Aprobada
+
+`Carrito.token_checkout` identifica una versión concreta de su contenido y
+rota únicamente ante mutaciones efectivas. Al confirmar, se copia a
+`Pedido.token_idempotencia`, cuya unicidad permite resolver reintentos. El
+Pedido conserva además una huella SHA-256 de la sesión con separador de
+dominio; nunca persiste la clave de sesión sin procesar.
+
+## DI-010 — Expiración bajo bloqueo
+
+**Estado:** Aprobada
+
+La vigencia del Carrito se evalúa con una hora obtenida después de adquirir
+su bloqueo de fila. Cuando un Carrito vencido debe eliminarse antes de
+informar un error o iniciar una operación nueva, el borrado se confirma en un
+límite transaccional independiente para impedir su resurrección por rollback.
+
+## DI-011 — Capacidad de cantidades e importes históricos
+
+**Estado:** Aprobada
+
+Inventario, MovimientoInventario y la cantidad total del Pedido utilizan
+enteros positivos de 64 bits. Los precios aplicados conservan precisión 12,2;
+los subtotales de Detalle utilizan 22,2 y el importe total del Pedido 31,2.
+
+## DI-012 — Identidad y datos actuales de Cliente
+
+**Estado:** Aprobada
+
+El DNI canónico contiene entre seis y ocho dígitos ASCII y admite en la entrada
+solamente puntos, espacios ASCII y guiones como separadores. Cliente se
+reutiliza por DNI y sus datos actuales corresponden al último Checkout que
+confirma bajo bloqueo. Cada Pedido conserva snapshots independientes.
+
+## DI-013 — Número público de Pedido
+
+**Estado:** Aprobada
+
+El número público tiene formato `YC-XXXXXXXXXXXX`, utiliza el alfabeto Crockford
+`0123456789ABCDEFGHJKMNPQRSTVWXYZ` y se genera con `secrets.choice`. Su
+unicidad está protegida por una constraint nombrada y se realizan hasta cinco
+intentos aislados mediante savepoints.
+
+## DI-014 — Movimientos de Inventario asociados a Pedidos
+
+**Estado:** Aprobada
+
+`MovimientoInventario.pedido` completa la relación opcional prevista por el
+dominio. `VENTA_PEDIDO` y `CANCELACION_PEDIDO` exigen Pedido; los movimientos
+administrativos exigen su ausencia. Orders adquiere los bloqueos y funciones
+internas específicas de Inventory actualizan stock y crean el movimiento como
+una sola operación dentro de la transacción exterior.
+
+## DI-015 — Estados, cancelación e inmutabilidad histórica
+
+**Estado:** Aprobada
+
+El Pedido nace PENDIENTE y solo admite las transiciones terminales a ENTREGADO
+o CANCELADO. La cancelación repone stock según los movimientos VENTA_PEDIDO,
+contrastados con los Detalles, y crea movimientos compensatorios. Los modelos
+históricos rechazan cambios y borrados por instancia; operaciones masivas o SQL
+privilegiado pueden omitir esas guardas Python y quedan fuera de los caminos
+funcionales autorizados.

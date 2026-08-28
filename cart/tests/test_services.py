@@ -471,3 +471,31 @@ class ModificarCarritoServiceTests(TestCase):
             )
         self.item.carrito.refresh_from_db()
         self.assertEqual(self.item.carrito.ultima_actividad, futuro)
+
+    def test_token_rota_solo_ante_mutaciones_efectivas(self):
+        self.item.carrito.refresh_from_db()
+        token_inicial = self.item.carrito.token_checkout
+        establecer_cantidad_item(
+            session_key="sesion-propia",
+            item_id=self.item.pk,
+            cantidad=self.item.cantidad,
+        )
+        self.item.carrito.refresh_from_db()
+        self.assertEqual(self.item.carrito.token_checkout, token_inicial)
+
+        establecer_cantidad_item(
+            session_key="sesion-propia",
+            item_id=self.item.pk,
+            cantidad=4,
+        )
+        self.item.carrito.refresh_from_db()
+        token_modificado = self.item.carrito.token_checkout
+        self.assertNotEqual(token_modificado, token_inicial)
+
+        vaciar_carrito("sesion-propia")
+        self.item.carrito.refresh_from_db()
+        token_vacio = self.item.carrito.token_checkout
+        self.assertNotEqual(token_vacio, token_modificado)
+        vaciar_carrito("sesion-propia")
+        self.item.carrito.refresh_from_db()
+        self.assertEqual(self.item.carrito.token_checkout, token_vacio)

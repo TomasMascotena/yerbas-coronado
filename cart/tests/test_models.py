@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 import shutil
 import tempfile
+import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -52,6 +53,12 @@ class CarritoModelTests(TestCase):
     def test_representacion_de_carrito_es_util(self):
         carrito = Carrito.objects.create(session_key="sesion-legible")
         self.assertIn("sesion-legible", str(carrito))
+
+    def test_token_checkout_es_uuid_unico(self):
+        primero = Carrito.objects.create(session_key="sesion-token-a")
+        segundo = Carrito.objects.create(session_key="sesion-token-b")
+        self.assertIsInstance(primero.token_checkout, uuid.UUID)
+        self.assertNotEqual(primero.token_checkout, segundo.token_checkout)
 
 
 @override_settings(MEDIA_ROOT=MEDIA_ROOT_PRUEBAS)

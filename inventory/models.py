@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 
 from catalog.models import Producto
+from inventory.exceptions import MovimientoInventarioInmutable
 
 
 class TipoMovimientoInventario(models.TextChoices):
@@ -20,7 +21,7 @@ class Inventario(models.Model):
         on_delete=models.PROTECT,
         related_name="inventario",
     )
-    cantidad_disponible = models.PositiveIntegerField(
+    cantidad_disponible = models.PositiveBigIntegerField(
         default=0,
         validators=[MinValueValidator(0)],
     )
@@ -45,10 +46,17 @@ class MovimientoInventario(models.Model):
         max_length=20,
         choices=TipoMovimientoInventario.choices,
     )
-    cantidad = models.PositiveIntegerField(
+    cantidad = models.PositiveBigIntegerField(
         validators=[MinValueValidator(1)],
     )
     observacion = models.TextField(blank=True, default="")
+    pedido = models.ForeignKey(
+        "orders.Pedido",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="movimientos_inventario",
+    )
 
     class Meta:
         constraints = [
@@ -62,4 +70,48 @@ class MovimientoInventario(models.Model):
                 ),
                 name="inventory_movimiento_tipo_valido",
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        tipo_movimiento__in=(
+                            TipoMovimientoInventario.VENTA_PEDIDO,
+                            TipoMovimientoInventario.CANCELACION_PEDIDO,
+                        ),
+                        pedido__isnull=False,
+                    )
+                    | Q(
+                        tipo_movimiento__in=(
+                            TipoMovimientoInventario.INGRESO_MERCADERIA,
+                            TipoMovimientoInventario.VENTA_PRESENCIAL,
+                            TipoMovimientoInventario.AJUSTE_POSITIVO,
+                            TipoMovimientoInventario.AJUSTE_NEGATIVO,
+                        ),
+                        pedido__isnull=True,
+                    )
+                ),
+                name="inventory_movimiento_pedido_coherente",
+            ),
+            models.UniqueConstraint(
+                fields=("pedido", "inventario", "tipo_movimiento"),
+                condition=Q(
+                    pedido__isnull=False,
+                    tipo_movimiento__in=(
+                        TipoMovimientoInventario.VENTA_PEDIDO,
+                        TipoMovimientoInventario.CANCELACION_PEDIDO,
+                    ),
+                ),
+                name="inventory_mov_pedido_inv_tipo_uniq",
+            ),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise MovimientoInventarioInmutable(
+                "El Movimiento de Inventario histórico no puede modificarse."
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise MovimientoInventarioInmutable(
+            "El Movimiento de Inventario histórico no puede eliminarse."
+        )
