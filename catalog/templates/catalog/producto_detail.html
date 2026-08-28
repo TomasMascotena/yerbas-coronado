@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'cart/cart.css' %}">{% endblock %}
 
 {% block title %}{{ producto.nombre }} {{ producto.peso }} · Yerbas Coronado{% endblock %}
 
@@ -20,6 +23,7 @@
         {% else %}
             <p class="availability availability--unavailable">Sin Stock</p>
         {% endif %}
+        {% include "cart/_agregar_producto.html" %}
     </div>
 </article>
 {% endblock %}

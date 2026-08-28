@@ -12,6 +12,7 @@ from cart.exceptions import (
     CarritoNoPerteneceALaSesion,
     ItemCarritoNoEncontrado,
     ProductoNoDisponible,
+    ProductoSinInventario,
     SesionNoDisponible,
     StockInsuficienteParaCarrito,
 )
@@ -25,7 +26,7 @@ from cart.services import (
     vaciar_carrito,
 )
 from cart.session import asegurar_session_key
-from cart.tests.helpers import crear_producto_con_stock
+from cart.tests.helpers import crear_item_directo, crear_producto_con_stock
 from catalog.models import Producto
 from catalog.tests.helpers import datos_producto, imagen_de_prueba
 from inventory.models import MovimientoInventario
@@ -147,6 +148,22 @@ class AgregarProductoServiceTests(TestCase):
         producto = Producto(**datos_producto(nombre="Sin inventario"))
         producto.full_clean()
         producto.save()
+        movimientos = MovimientoInventario.objects.count()
+
+        with self.assertRaises(ProductoSinInventario):
+            agregar_producto(
+                session_key=self.session_key,
+                producto_id=producto.pk,
+                cantidad=1,
+            )
+        self.assertFalse(Carrito.objects.exists())
+        self.assertFalse(ItemCarrito.objects.exists())
+        self.assertEqual(MovimientoInventario.objects.count(), movimientos)
+
+    def test_producto_sin_inventario_es_compatible_con_excepcion_padre(self):
+        producto = Producto(**datos_producto(nombre="Sin inventario padre"))
+        producto.full_clean()
+        producto.save()
 
         with self.assertRaises(ProductoNoDisponible):
             agregar_producto(
@@ -154,6 +171,7 @@ class AgregarProductoServiceTests(TestCase):
                 producto_id=producto.pk,
                 cantidad=1,
             )
+
         self.assertFalse(Carrito.objects.exists())
 
     def test_stock_cero_o_insuficiente_se_rechaza_sin_carrito(self):
@@ -324,6 +342,27 @@ class ModificarCarritoServiceTests(TestCase):
                 item_id=self.item.pk,
                 cantidad=2,
             )
+
+    def test_establecer_producto_sin_inventario_revierte_sin_cambios(self):
+        producto = Producto(**datos_producto(nombre="Item sin inventario"))
+        producto.full_clean()
+        producto.save()
+        item = crear_item_directo(producto=producto, cantidad=2)
+        actividad = item.carrito.ultima_actividad
+        movimientos = MovimientoInventario.objects.count()
+
+        with self.assertRaises(ProductoSinInventario):
+            establecer_cantidad_item(
+                session_key=item.carrito.session_key,
+                item_id=item.pk,
+                cantidad=3,
+            )
+
+        item.refresh_from_db()
+        item.carrito.refresh_from_db()
+        self.assertEqual(item.cantidad, 2)
+        self.assertEqual(item.carrito.ultima_actividad, actividad)
+        self.assertEqual(MovimientoInventario.objects.count(), movimientos)
 
     def test_no_puede_modificarse_item_de_otra_sesion(self):
         obtener_o_crear_carrito("sesion-ajena")
