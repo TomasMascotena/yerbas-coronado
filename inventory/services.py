@@ -1,10 +1,15 @@
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.transaction import TransactionManagementError
 
 from inventory.exceptions import (
     CantidadMovimientoInvalida,
+    CapacidadInventarioExcedida,
     ObservacionObligatoria,
     StockInsuficiente,
 )
+
+
+MAX_BIGINT_POSITIVO = 9_223_372_036_854_775_807
 from inventory.models import (
     Inventario,
     MovimientoInventario,
@@ -131,3 +136,66 @@ def _normalizar_observacion(observacion, *, obligatoria):
             "Los ajustes requieren una observación no vacía."
         )
     return normalizada
+
+
+def _aplicar_venta_pedido_sobre_inventario_bloqueado(
+    *, inventario, pedido, cantidad
+):
+    _exigir_transaccion_activa()
+    _validar_cantidad(cantidad)
+    if cantidad > inventario.cantidad_disponible:
+        raise StockInsuficiente(
+            "La cantidad solicitada supera el stock disponible."
+        )
+    inventario.cantidad_disponible -= cantidad
+    inventario.full_clean()
+    inventario.save(update_fields=("cantidad_disponible",))
+    return _crear_movimiento_pedido(
+        inventario=inventario,
+        pedido=pedido,
+        cantidad=cantidad,
+        tipo_movimiento=TipoMovimientoInventario.VENTA_PEDIDO,
+    )
+
+
+def _aplicar_cancelacion_pedido_sobre_inventario_bloqueado(
+    *, inventario, pedido, cantidad
+):
+    _exigir_transaccion_activa()
+    _validar_cantidad(cantidad)
+    cantidad_nueva = inventario.cantidad_disponible + cantidad
+    if cantidad_nueva > MAX_BIGINT_POSITIVO:
+        raise CapacidadInventarioExcedida(
+            "La restitución excede la capacidad del Inventario."
+        )
+    inventario.cantidad_disponible = cantidad_nueva
+    inventario.full_clean()
+    inventario.save(update_fields=("cantidad_disponible",))
+    return _crear_movimiento_pedido(
+        inventario=inventario,
+        pedido=pedido,
+        cantidad=cantidad,
+        tipo_movimiento=TipoMovimientoInventario.CANCELACION_PEDIDO,
+    )
+
+
+def _crear_movimiento_pedido(
+    *, inventario, pedido, cantidad, tipo_movimiento
+):
+    movimiento = MovimientoInventario(
+        inventario=inventario,
+        pedido=pedido,
+        tipo_movimiento=tipo_movimiento,
+        cantidad=cantidad,
+        observacion="",
+    )
+    movimiento.full_clean()
+    movimiento.save()
+    return movimiento
+
+
+def _exigir_transaccion_activa():
+    if not connection.in_atomic_block:
+        raise TransactionManagementError(
+            "Los movimientos de Pedido requieren una transacción exterior."
+        )

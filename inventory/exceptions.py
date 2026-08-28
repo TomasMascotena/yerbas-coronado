@@ -8,3 +8,11 @@ class ObservacionObligatoria(Exception):
 
 class StockInsuficiente(Exception):
     pass
+
+
+class CapacidadInventarioExcedida(Exception):
+    pass
+
+
+class MovimientoInventarioInmutable(Exception):
+    pass

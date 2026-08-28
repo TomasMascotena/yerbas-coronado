@@ -1,7 +1,7 @@
 import shutil
 import tempfile
 
-from django.core.exceptions import FieldDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
@@ -59,9 +59,10 @@ class MovimientoInventarioModelTests(TestCase):
             },
         )
 
-    def test_no_existe_campo_pedido_en_esta_implementacion_incremental(self):
-        with self.assertRaises(FieldDoesNotExist):
-            MovimientoInventario._meta.get_field("pedido")
+    def test_pedido_es_fk_opcional_y_protectiva(self):
+        campo = MovimientoInventario._meta.get_field("pedido")
+        self.assertTrue(campo.null)
+        self.assertEqual(campo.remote_field.on_delete.__name__, "PROTECT")
 
     def test_aplicacion_rechaza_cantidad_cero_o_negativa(self):
         for cantidad in (0, -1):

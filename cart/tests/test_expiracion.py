@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from cart.exceptions import ItemCarritoNoEncontrado
+from cart.exceptions import ProductoNoDisponible
 from cart.models import Carrito, ItemCarrito
 from cart.services import (
     DURACION_CARRITO,
@@ -248,3 +249,15 @@ class ExpiracionCarritoTests(TestCase):
             MovimientoInventario.objects.count(),
             movimientos_iniciales,
         )
+
+    def test_agregar_invalido_tras_expirar_confirma_borrado_sin_carrito_nuevo(self):
+        self.fijar_actividad(self.ahora - DURACION_CARRITO)
+        with patch("cart.services._ahora", return_value=self.ahora):
+            with self.assertRaises(ProductoNoDisponible):
+                agregar_producto(
+                    session_key="sesion-expiracion",
+                    producto_id=999999,
+                    cantidad=1,
+                )
+        self.assertFalse(Carrito.objects.exists())
+        self.assertFalse(ItemCarrito.objects.exists())

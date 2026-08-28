@@ -1,4 +1,5 @@
 from decimal import Decimal
+import uuid
 
 from django.core.validators import MinLengthValidator, MinValueValidator
 from django.db import models
@@ -16,9 +17,17 @@ class Carrito(models.Model):
     )
     creado_en = models.DateTimeField(default=timezone.now, editable=False)
     ultima_actividad = models.DateTimeField(default=timezone.now, editable=False)
+    token_checkout = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     class Meta:
         constraints = [
+            models.UniqueConstraint(
+                fields=("token_checkout",),
+                name="cart_carrito_token_checkout_uniq",
+            ),
             models.CheckConstraint(
                 condition=~Q(session_key=""),
                 name="cart_carrito_session_key_no_vacia",
