@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Productos · Yerbas Coronado{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <p class="eyebrow">Catálogo</p>
+    <h1>Nuestras yerbas</h1>
+    <p>Encontrá la presentación que mejor acompaña tu mate.</p>
+</section>
+
+{% if productos %}
+    <section class="product-grid" aria-label="Catálogo de productos">
+        {% for producto in productos %}
+            <article class="product-card">
+                <a class="product-card__image" href="{% url 'catalog:producto_detail' producto.pk %}">
+                    <img src="{{ producto.imagen.url }}" alt="Producto {{ producto.nombre }}, presentación {{ producto.peso }}" loading="lazy">
+                </a>
+                <div class="product-card__content">
+                    <div>
+                        <p class="product-weight">{{ producto.peso }}</p>
+                        <h2><a href="{% url 'catalog:producto_detail' producto.pk %}">{{ producto.nombre }}</a></h2>
+                    </div>
+                    {% include "catalog/_precios.html" %}
+                    {% if producto.inventario.cantidad_disponible > 0 %}
+                        <p class="availability availability--available">Disponible</p>
+                    {% else %}
+                        <p class="availability availability--unavailable">Sin Stock</p>
+                    {% endif %}
+                    <a class="detail-link" href="{% url 'catalog:producto_detail' producto.pk %}" aria-label="Ver {{ producto.nombre }}, presentación {{ producto.peso }}">Ver producto</a>
+                </div>
+            </article>
+        {% endfor %}
+    </section>
+{% else %}
+    <p class="empty-state">No hay Productos publicados en este momento.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{% load catalog_format %}
+<dl class="price-list" aria-label="Escalas de precio">
+    <div>
+        <dt>Precio unitario</dt>
+        <dd>{{ producto.precio_unitario|precio_ars }}</dd>
+    </div>
+    <div>
+        <dt>Desde 3 unidades</dt>
+        <dd>{{ producto.precio_desde_3|precio_ars }}</dd>
+    </div>
+    <div>
+        <dt>Desde 20 unidades</dt>
+        <dd>{{ producto.precio_desde_20|precio_ars }}</dd>
+    </div>
+</dl>

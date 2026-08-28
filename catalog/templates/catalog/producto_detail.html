@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}{{ producto.nombre }} {{ producto.peso }} · Yerbas Coronado{% endblock %}
+
+{% block content %}
+<p class="back-link"><a href="{% url 'catalog:producto_list' %}">← Volver a Productos</a></p>
+<article class="product-detail">
+    <div class="product-detail__image">
+        <img src="{{ producto.imagen.url }}" alt="Producto {{ producto.nombre }}, presentación {{ producto.peso }}">
+    </div>
+    <div class="product-detail__content">
+        <p class="eyebrow">{{ producto.peso }}</p>
+        <h1>{{ producto.nombre }}</h1>
+        {% if producto.descripcion %}
+            <p class="product-description">{{ producto.descripcion }}</p>
+        {% endif %}
+        {% include "catalog/_precios.html" %}
+        {% if producto.inventario.cantidad_disponible > 0 %}
+            <p class="availability availability--available">Disponible</p>
+        {% else %}
+            <p class="availability availability--unavailable">Sin Stock</p>
+        {% endif %}
+    </div>
+</article>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="es-AR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Yerbas Coronado{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'catalog/catalog.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Ir al contenido principal</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="{% url 'catalog:producto_list' %}">Yerbas Coronado</a>
+            <nav aria-label="Navegación principal">
+                <a href="{% url 'catalog:producto_list' %}">Productos</a>
+            </nav>
+        </div>
+    </header>
+    <main id="contenido" class="page-shell">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+        <p>Yerbas Coronado · Yerba mate para compartir</p>
+    </footer>
+</body>
+</html>
