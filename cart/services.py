@@ -8,6 +8,7 @@ from cart.exceptions import (
     CarritoNoPerteneceALaSesion,
     ItemCarritoNoEncontrado,
     ProductoNoDisponible,
+    ProductoSinInventario,
     SesionNoDisponible,
     StockInsuficienteParaCarrito,
 )
@@ -109,7 +110,7 @@ def _obtener_producto_e_inventario_bloqueados(producto_id):
             producto_id=producto.pk
         )
     except Inventario.DoesNotExist as error:
-        raise ProductoNoDisponible(
+        raise ProductoSinInventario(
             "El Producto no posee Inventario."
         ) from error
     return producto, inventario

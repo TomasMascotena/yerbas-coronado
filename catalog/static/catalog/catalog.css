@@ -75,6 +75,28 @@ a:focus-visible {
     text-decoration: none;
 }
 
+.site-header nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.cart-link {
+    gap: 0.45rem;
+}
+
+.cart-count {
+    display: inline-grid;
+    min-width: 1.7rem;
+    min-height: 1.7rem;
+    padding: 0.15rem 0.35rem;
+    place-items: center;
+    border-radius: 999px;
+    color: var(--yerba-dark);
+    background: var(--cream);
+    font-size: 0.82rem;
+}
+
 .brand {
     font-size: 1.25rem;
     letter-spacing: 0.02em;
@@ -85,6 +107,25 @@ a:focus-visible {
     min-height: calc(100vh - 10rem);
     margin: 0 auto;
     padding: 3.5rem 0 5rem;
+}
+
+.messages {
+    display: grid;
+    gap: 0.65rem;
+    margin-bottom: 1.5rem;
+}
+
+.message {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-left: 0.35rem solid var(--yerba);
+    border-radius: 0.45rem;
+    background: var(--white);
+}
+
+.message--error {
+    border-left-color: var(--terracotta);
 }
 
 .page-heading {
@@ -282,5 +323,22 @@ a:focus-visible {
 
     .product-detail__content {
         padding-top: 0;
+    }
+}
+
+@media (max-width: 19rem) {
+    .site-header__inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.25rem;
+    }
+
+    .brand {
+        justify-content: center;
+    }
+
+    .site-header nav {
+        justify-content: space-between;
+        gap: 0.25rem;
     }
 }

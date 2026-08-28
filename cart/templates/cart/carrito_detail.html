@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load static catalog_format %}
+
+{% block title %}Carrito · Yerbas Coronado{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'cart/cart.css' %}">{% endblock %}
+
+{% block content %}
+<section class="page-heading cart-heading">
+    <p class="eyebrow">Tu selección</p>
+    <h1>Carrito</h1>
+</section>
+
+{% if lineas %}
+    <div class="cart-layout">
+        <section class="cart-lines" aria-label="Productos en el Carrito">
+            {% for linea in lineas %}
+                <article class="cart-line">
+                    <div class="cart-line__image">
+                        <img src="{{ linea.producto.imagen.url }}" alt="Producto {{ linea.producto.nombre }}, presentación {{ linea.producto.peso }}">
+                    </div>
+                    <div class="cart-line__content">
+                        <div>
+                            <p class="product-weight">{{ linea.producto.peso }}</p>
+                            <h2>{{ linea.producto.nombre }}</h2>
+                        </div>
+                        <p class="cart-line__state">{{ linea.estado }}</p>
+                        <dl class="cart-line__prices">
+                            <div>
+                                <dt>Cantidad actual</dt>
+                                <dd>{{ linea.calculo.cantidad }}</dd>
+                            </div>
+                            <div>
+                                <dt>Precio aplicado</dt>
+                                <dd>{{ linea.calculo.precio_aplicado|precio_ars }}</dd>
+                            </div>
+                            <div>
+                                <dt>Subtotal</dt>
+                                <dd>{{ linea.calculo.subtotal|precio_ars }}</dd>
+                            </div>
+                        </dl>
+                        <div class="cart-line__actions">
+                            {% if linea.puede_actualizar %}
+                                <form class="quantity-form" action="{% url 'cart:establecer_cantidad' linea.calculo.item_id %}" method="post">
+                                    {% csrf_token %}
+                                    <label for="{{ linea.formulario_cantidad.cantidad.id_for_label }}">Cantidad</label>
+                                    {{ linea.formulario_cantidad.cantidad }}
+                                    <button class="button button--secondary" type="submit" aria-label="Actualizar cantidad de {{ linea.producto.nombre }}, presentación {{ linea.producto.peso }}">
+                                        Actualizar
+                                    </button>
+                                </form>
+                            {% else %}
+                                <p class="cart-line__notice">La cantidad no puede modificarse mientras el Producto no esté disponible.</p>
+                            {% endif %}
+                            <form action="{% url 'cart:eliminar_item' linea.calculo.item_id %}" method="post">
+                                {% csrf_token %}
+                                <button class="button button--danger" type="submit" aria-label="Eliminar {{ linea.producto.nombre }}, presentación {{ linea.producto.peso }} del Carrito">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+
+        <aside class="cart-summary" aria-label="Resumen del Carrito">
+            <h2>Resumen</h2>
+            <dl>
+                <div>
+                    <dt>Unidades</dt>
+                    <dd>{{ resumen.cantidad_total_unidades }}</dd>
+                </div>
+                <div>
+                    <dt>Escala aplicada</dt>
+                    <dd>{{ escala_aplicada }}</dd>
+                </div>
+                <div class="cart-summary__total">
+                    <dt>Total</dt>
+                    <dd>{{ resumen.importe_total|precio_ars }}</dd>
+                </div>
+            </dl>
+            <form action="{% url 'cart:vaciar' %}" method="post">
+                {% csrf_token %}
+                <button class="button button--danger button--full" type="submit">Vaciar Carrito</button>
+            </form>
+        </aside>
+    </div>
+{% else %}
+    <section class="empty-state cart-empty">
+        <h2>Tu Carrito está vacío.</h2>
+        <p>Explorá el catálogo para elegir tu próxima yerba.</p>
+        <a class="button button--primary" href="{% url 'catalog:producto_list' %}">Ver Productos</a>
+    </section>
+{% endif %}
+{% endblock %}

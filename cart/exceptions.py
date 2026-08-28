@@ -10,6 +10,10 @@ class ProductoNoDisponible(Exception):
     pass
 
 
+class ProductoSinInventario(ProductoNoDisponible):
+    pass
+
+
 class StockInsuficienteParaCarrito(Exception):
     pass
 

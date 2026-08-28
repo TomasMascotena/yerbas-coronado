@@ -105,3 +105,37 @@ no se persisten. Todos los cálculos monetarios utilizan `Decimal`.
 
 Un Carrito vacío no posee una escala aplicable y su importe total es
 `Decimal("0.00")`.
+
+## DI-008 — Interfaz pública del Carrito
+
+**Estado:** Aprobada
+
+La interfaz pública del Carrito utiliza la sesión anónima de Django únicamente
+para identificar al Visitante. La `session_key` se crea ante el primer intento
+explícito de agregar un Producto; las lecturas del catálogo y del Carrito no
+crean sesiones ni renuevan `ultima_actividad`.
+
+Las operaciones de agregado, actualización, eliminación y vaciado utilizan
+exclusivamente POST, protección CSRF y el patrón POST/Redirect/GET. La capa web
+delega las reglas comerciales a los servicios existentes de `cart`.
+
+El encabezado público muestra la cantidad total de unidades mediante el resumen
+canónico del Carrito, evaluado de forma diferida y reutilizado dentro de una
+misma solicitud. Los precios aplicados, subtotales, escala e importe total
+provienen exclusivamente de `cart.pricing`.
+
+Los Productos modificados después de incorporarse conservan sus snapshots de
+precio. Un Producto inactivo o con stock cero permanece visible en el Carrito,
+no puede actualizar su cantidad y puede eliminarse. Si el stock positivo
+observado es inferior a la cantidad de la línea, se informa que la
+disponibilidad cambió sin exponer cantidades exactas.
+
+La ausencia de Inventario en un Producto se trata como una violación
+estructural mediante `ProductoSinInventario`, compatible como subclase de
+`ProductoNoDisponible`, pero diferenciable por la capa web para producir un
+error interno sanitizado.
+
+La preparación del Carrito no reserva ni modifica Inventario y no crea
+Movimientos de Inventario. La disponibilidad observada se valida de forma
+preventiva mediante los servicios y deberá volver a validarse al generar el
+Pedido.
