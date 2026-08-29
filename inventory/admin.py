@@ -6,6 +6,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
 from inventory.exceptions import (
+    CapacidadInventarioExcedida,
     CantidadMovimientoInvalida,
     ObservacionObligatoria,
     StockInsuficiente,
@@ -182,6 +183,11 @@ class InventarioAdmin(admin.ModelAdmin):
                 form.add_error(
                     None,
                     "No hay stock suficiente para realizar la operación.",
+                )
+            except CapacidadInventarioExcedida:
+                form.add_error(
+                    None,
+                    "La operación excede la capacidad máxima del Inventario.",
                 )
             else:
                 self.message_user(request, mensaje, level=messages.SUCCESS)

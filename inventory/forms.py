@@ -1,8 +1,13 @@
 from django import forms
 
+from inventory.services import MAX_BIGINT_POSITIVO
+
 
 class MovimientoAdministrativoForm(forms.Form):
-    cantidad = forms.IntegerField(min_value=1)
+    cantidad = forms.IntegerField(
+        min_value=1,
+        max_value=MAX_BIGINT_POSITIVO,
+    )
     observacion = forms.CharField(
         required=False,
         strip=True,
@@ -11,7 +16,10 @@ class MovimientoAdministrativoForm(forms.Form):
 
 
 class AjusteInventarioForm(forms.Form):
-    cantidad = forms.IntegerField(min_value=1)
+    cantidad = forms.IntegerField(
+        min_value=1,
+        max_value=MAX_BIGINT_POSITIVO,
+    )
     observacion = forms.CharField(
         label="Justificación",
         required=True,

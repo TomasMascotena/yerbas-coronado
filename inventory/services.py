@@ -96,6 +96,10 @@ def _registrar_movimiento(
 
     if efecto == 1:
         cantidad_nueva = inventario.cantidad_disponible + cantidad
+        if cantidad_nueva > MAX_BIGINT_POSITIVO:
+            raise CapacidadInventarioExcedida(
+                "La operación excede la capacidad del Inventario."
+            )
     else:
         if cantidad > inventario.cantidad_disponible:
             raise StockInsuficiente(
@@ -126,6 +130,10 @@ def _validar_cantidad(cantidad):
     ):
         raise CantidadMovimientoInvalida(
             "La cantidad debe ser un entero estrictamente positivo."
+        )
+    if cantidad > MAX_BIGINT_POSITIVO:
+        raise CapacidadInventarioExcedida(
+            "La cantidad excede la capacidad de almacenamiento."
         )
 
 
