@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static catalog_format %}
+
+{% block title %}Finalizar compra · Yerbas Coronado{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'cart/cart.css' %}">
+    <link rel="stylesheet" href="{% static 'orders/checkout.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="page-heading checkout-heading">
+    <p class="eyebrow">Confirmación</p>
+    <h1>Finalizar compra</h1>
+    <p>Completá tus datos para generar el Pedido. Después podrás continuar la conversación por WhatsApp.</p>
+</section>
+
+<div class="checkout-layout">
+    <form class="checkout-form" method="post" novalidate data-checkout-form data-modalidad-envio="ENVIO_DOMICILIO">
+        {% csrf_token %}
+        {{ form.token_checkout }}
+
+        {% if form.errors %}
+            <section class="form-error-summary" role="alert" tabindex="-1" aria-labelledby="errores-checkout">
+                <h2 id="errores-checkout">Revisá los datos ingresados</h2>
+                <ul>
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+        <fieldset>
+            <legend>Datos personales</legend>
+            <div class="form-grid">
+                <div class="form-field{% if form.nombre.errors %} form-field--error{% endif %}">
+                    {{ form.nombre.label_tag }}
+                    {{ form.nombre }}
+                    {{ form.nombre.errors }}
+                </div>
+                <div class="form-field{% if form.apellido.errors %} form-field--error{% endif %}">
+                    {{ form.apellido.label_tag }}
+                    {{ form.apellido }}
+                    {{ form.apellido.errors }}
+                </div>
+                <div class="form-field{% if form.dni.errors %} form-field--error{% endif %}">
+                    {{ form.dni.label_tag }}
+                    {{ form.dni }}
+                    <p class="field-help" id="{{ form.dni.id_for_label }}_helptext">{{ form.dni.help_text }}</p>
+                    {{ form.dni.errors }}
+                </div>
+                <div class="form-field{% if form.telefono.errors %} form-field--error{% endif %}">
+                    {{ form.telefono.label_tag }}
+                    {{ form.telefono }}
+                    {{ form.telefono.errors }}
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="delivery-choice">
+            <legend>{{ form.modalidad_entrega.label }}</legend>
+            {{ form.modalidad_entrega }}
+            {{ form.modalidad_entrega.errors }}
+        </fieldset>
+
+        <fieldset data-direccion-envio>
+            <legend>Dirección de envío</legend>
+            <p class="fieldset-help">Completá estos datos únicamente si elegís envío a domicilio.</p>
+            <div class="form-grid">
+                <div class="form-field form-field--wide{% if form.calle.errors %} form-field--error{% endif %}">
+                    {{ form.calle.label_tag }}
+                    {{ form.calle }}
+                    {{ form.calle.errors }}
+                </div>
+                <div class="form-field{% if form.numero.errors %} form-field--error{% endif %}">
+                    {{ form.numero.label_tag }}
+                    {{ form.numero }}
+                    {{ form.numero.errors }}
+                </div>
+                <div class="form-field{% if form.piso.errors %} form-field--error{% endif %}">
+                    {{ form.piso.label_tag }}
+                    {{ form.piso }}
+                    {{ form.piso.errors }}
+                </div>
+                <div class="form-field{% if form.departamento.errors %} form-field--error{% endif %}">
+                    {{ form.departamento.label_tag }}
+                    {{ form.departamento }}
+                    {{ form.departamento.errors }}
+                </div>
+                <div class="form-field{% if form.localidad.errors %} form-field--error{% endif %}">
+                    {{ form.localidad.label_tag }}
+                    {{ form.localidad }}
+                    {{ form.localidad.errors }}
+                </div>
+                <div class="form-field{% if form.provincia.errors %} form-field--error{% endif %}">
+                    {{ form.provincia.label_tag }}
+                    {{ form.provincia }}
+                    {{ form.provincia.errors }}
+                </div>
+                <div class="form-field{% if form.codigo_postal.errors %} form-field--error{% endif %}">
+                    {{ form.codigo_postal.label_tag }}
+                    {{ form.codigo_postal }}
+                    {{ form.codigo_postal.errors }}
+                </div>
+                <div class="form-field form-field--full{% if form.referencias.errors %} form-field--error{% endif %}">
+                    {{ form.referencias.label_tag }}
+                    {{ form.referencias }}
+                    {{ form.referencias.errors }}
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="form-field{% if form.observaciones.errors %} form-field--error{% endif %}">
+            {{ form.observaciones.label_tag }}
+            {{ form.observaciones }}
+            <p class="field-help" id="{{ form.observaciones.id_for_label }}_helptext">{{ form.observaciones.help_text }}</p>
+            {{ form.observaciones.errors }}
+        </div>
+
+        <button class="button button--primary button--full" type="submit">Confirmar Pedido</button>
+    </form>
+
+    <aside class="checkout-summary" aria-label="Resumen del Carrito">
+        <h2>Tu Pedido</h2>
+        <div class="checkout-lines">
+            {% for linea in lineas %}
+                <article class="checkout-line">
+                    <h3>{{ linea.item.producto.nombre }}</h3>
+                    <p>{{ linea.item.producto.peso }}</p>
+                    <dl>
+                        <div><dt>Cantidad</dt><dd>{{ linea.calculo.cantidad }}</dd></div>
+                        <div><dt>Precio aplicado</dt><dd>{{ linea.calculo.precio_aplicado|precio_ars }}</dd></div>
+                        <div><dt>Subtotal</dt><dd>{{ linea.calculo.subtotal|precio_ars }}</dd></div>
+                    </dl>
+                </article>
+            {% endfor %}
+        </div>
+        <dl class="checkout-total">
+            <div><dt>Unidades</dt><dd>{{ resumen.cantidad_total_unidades }}</dd></div>
+            <div><dt>Total de mercadería</dt><dd>{{ resumen.importe_total|precio_ars }}</dd></div>
+        </dl>
+        <p class="checkout-note">El costo de envío no está incluido y se coordina posteriormente.</p>
+        <a class="back-link-inline" href="{% url 'cart:detalle' %}">Volver al Carrito</a>
+    </aside>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'orders/checkout.js' %}" defer></script>{% endblock %}

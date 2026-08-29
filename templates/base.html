@@ -26,7 +26,7 @@
     </header>
     <main id="contenido" class="page-shell">
         {% if messages %}
-            <section class="messages" aria-label="Mensajes del Carrito">
+            <section class="messages" aria-label="Mensajes del sitio">
                 {% for message in messages %}
                     <p class="message message--{{ message.tags }}" {% if "error" in message.tags %}role="alert"{% else %}role="status"{% endif %}>{{ message }}</p>
                 {% endfor %}
@@ -37,5 +37,6 @@
     <footer class="site-footer">
         <p>Yerbas Coronado · Yerba mate para compartir</p>
     </footer>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

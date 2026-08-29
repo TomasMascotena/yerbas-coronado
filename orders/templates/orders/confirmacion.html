@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static catalog_format %}
+
+{% block title %}Pedido {{ pedido.numero_pedido }} · Yerbas Coronado{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'cart/cart.css' %}">
+    <link rel="stylesheet" href="{% static 'orders/checkout.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="page-heading confirmation-heading">
+    <p class="eyebrow">Pedido generado</p>
+    <h1>¡Gracias por tu compra!</h1>
+    <p>Tu Pedido <strong>{{ pedido.numero_pedido }}</strong> quedó registrado como {{ pedido.get_estado_display }}.</p>
+</section>
+
+<div class="confirmation-layout">
+    <section class="confirmation-card" aria-labelledby="resumen-pedido">
+        <h2 id="resumen-pedido">Resumen del Pedido</h2>
+        <dl class="confirmation-data">
+            <div><dt>Comprador</dt><dd>{{ pedido.nombre_cliente }} {{ pedido.apellido_cliente }}</dd></div>
+            <div><dt>Teléfono</dt><dd>{{ pedido.telefono_cliente }}</dd></div>
+            <div><dt>Modalidad</dt><dd>{{ pedido.get_modalidad_entrega_display }}</dd></div>
+            {% if direccion %}
+                <div>
+                    <dt>Dirección</dt>
+                    <dd>
+                        {{ direccion.calle }} {{ direccion.numero }}{% if direccion.piso %}, piso {{ direccion.piso }}{% endif %}{% if direccion.departamento %}, departamento {{ direccion.departamento }}{% endif %}, {{ direccion.localidad }}, {{ direccion.provincia }}{% if direccion.codigo_postal %}, CP {{ direccion.codigo_postal }}{% endif %}
+                    </dd>
+                </div>
+                {% if direccion.referencias %}<div><dt>Referencias</dt><dd>{{ direccion.referencias }}</dd></div>{% endif %}
+            {% endif %}
+            {% if pedido.observaciones %}<div><dt>Observaciones</dt><dd>{{ pedido.observaciones }}</dd></div>{% endif %}
+        </dl>
+
+        <div class="confirmation-lines" aria-label="Productos del Pedido">
+            {% for detalle in detalles %}
+                <article class="confirmation-line">
+                    <div>
+                        <h3>{{ detalle.nombre_producto }}</h3>
+                        <p>{{ detalle.peso_producto }}</p>
+                    </div>
+                    <dl>
+                        <div><dt>Cantidad</dt><dd>{{ detalle.cantidad }}</dd></div>
+                        <div><dt>Precio unitario</dt><dd>{{ detalle.precio_unitario_aplicado|precio_ars }}</dd></div>
+                        <div><dt>Subtotal</dt><dd>{{ detalle.subtotal|precio_ars }}</dd></div>
+                    </dl>
+                </article>
+            {% endfor %}
+        </div>
+
+        <dl class="confirmation-total">
+            <div><dt>Total de mercadería</dt><dd>{{ pedido.importe_total|precio_ars }}</dd></div>
+        </dl>
+        {% if pedido.modalidad_entrega == "ENVIO_DOMICILIO" %}
+            <p class="checkout-note">El costo de envío se coordina posteriormente y no está incluido en este total.</p>
+        {% endif %}
+    </section>
+
+    <aside class="whatsapp-card" aria-labelledby="continuar-whatsapp">
+        <h2 id="continuar-whatsapp">Continuar por WhatsApp</h2>
+        <p>El Pedido ya está guardado. Usá WhatsApp para coordinar los próximos pasos con Yerbas Coronado.</p>
+        {% if enlace_whatsapp %}
+            <a class="button button--primary button--full" href="{{ enlace_whatsapp }}" referrerpolicy="no-referrer" rel="noreferrer">Continuar por WhatsApp</a>
+        {% else %}
+            <p class="whatsapp-unavailable" role="status">WhatsApp no está disponible temporalmente. Tu Pedido continúa registrado.</p>
+        {% endif %}
+        <a class="back-link-inline" href="{% url 'catalog:producto_list' %}">Volver a Productos</a>
+    </aside>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ import secrets
 import uuid
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 
 from cart.models import Carrito, ItemCarrito
 from cart.pricing import EstadoPrecioCarritoInvalido, calcular_resumen
@@ -86,6 +87,34 @@ class DatosDireccionEnvio:
 class ResultadoCreacionPedido:
     pedido: Pedido
     creado: bool
+
+
+def obtener_pedido_para_confirmacion(*, numero_pedido, session_key):
+    if (
+        not isinstance(numero_pedido, str)
+        or not numero_pedido
+        or not isinstance(session_key, str)
+        or not session_key.strip()
+        or len(session_key) > 40
+    ):
+        return None
+
+    huella = _calcular_huella_sesion(session_key)
+    return (
+        Pedido.objects.select_related("direccion_envio")
+        .prefetch_related(
+            Prefetch(
+                "detalles",
+                queryset=DetallePedido.objects.order_by("pk"),
+                to_attr="detalles_confirmacion",
+            )
+        )
+        .filter(
+            numero_pedido=numero_pedido,
+            huella_sesion_origen=huella,
+        )
+        .first()
+    )
 
 
 def crear_pedido_desde_carrito(
