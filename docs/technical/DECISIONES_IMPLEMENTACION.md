@@ -205,3 +205,30 @@ contrastados con los Detalles, y crea movimientos compensatorios. Los modelos
 históricos rechazan cambios y borrados por instancia; operaciones masivas o SQL
 privilegiado pueden omitir esas guardas Python y quedan fuera de los caminos
 funcionales autorizados.
+
+## DI-016 — Checkout público, confirmación y WhatsApp
+
+**Estado:** Aprobada
+
+La confirmación pública de un Pedido se autoriza combinando su
+`numero_pedido` con la `huella_sesion_origen` calculada a partir de la sesión
+actual. El `token_checkout` se transmite únicamente como campo oculto del POST
+y no forma parte de ninguna URL.
+
+La regla general es que GET y HEAD no produzcan escrituras. Se conserva como
+excepción explícita y deliberada la eliminación diferida de un Carrito vencido
+durante su acceso, según DI-006.
+
+Las URLs propias de la aplicación no incluyen DNI, teléfono ni dirección. Se
+autoriza como excepción técnica que teléfono y dirección formen parte
+únicamente del parámetro externo `text`, correctamente codificado, de un enlace
+`wa.me`. El DNI no se muestra en la confirmación ni se incorpora al mensaje de
+WhatsApp.
+
+El número comercial de WhatsApp se obtiene de la configuración del entorno. Si
+está ausente o no posee el formato canónico aprobado, el Pedido y su página de
+confirmación permanecen disponibles, pero no se muestra el enlace de WhatsApp.
+
+La interfaz puede utilizar JavaScript como mejora progresiva para mostrar u
+ocultar los campos de Dirección de Envío. El formulario completo permanece
+utilizable sin JavaScript y toda validación definitiva continúa en el servidor.

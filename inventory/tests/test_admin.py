@@ -14,12 +14,14 @@ from catalog.admin import ProductoAdmin
 from catalog.models import Producto
 from inventory.admin import InventarioAdmin, MovimientoInventarioAdmin
 from inventory.exceptions import (
+    CapacidadInventarioExcedida,
     CantidadMovimientoInvalida,
     ObservacionObligatoria,
     StockInsuficiente,
 )
 from inventory.models import Inventario, MovimientoInventario, TipoMovimientoInventario
 from inventory.services import (
+    MAX_BIGINT_POSITIVO,
     registrar_ajuste_negativo,
     registrar_ajuste_positivo,
     registrar_ingreso_mercaderia,
@@ -396,6 +398,44 @@ class InventarioAdminOperacionesTests(InventoryAdminTestBase):
         servicio.assert_not_called()
         self.assertFalse(MovimientoInventario.objects.exists())
 
+    def test_cantidad_superior_a_bigint_es_error_de_formulario(self):
+        inventario = self.crear_inventario()
+        with patch("inventory.admin.registrar_ingreso_mercaderia") as servicio:
+            response = self.client.post(
+                self.url_operacion(inventario, "ingreso_mercaderia"),
+                {"cantidad": 2**63, "observacion": ""},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("cantidad", response.context["form"].errors)
+        servicio.assert_not_called()
+        inventario.refresh_from_db()
+        self.assertEqual(inventario.cantidad_disponible, 0)
+        self.assertFalse(MovimientoInventario.objects.exists())
+
+    def test_overflow_de_stock_se_muestra_y_revierte_sin_error_500(self):
+        inventario = self.crear_inventario()
+        registrar_ingreso_mercaderia(inventario_id=inventario.pk, cantidad=5)
+        movimientos_iniciales = MovimientoInventario.objects.count()
+
+        response = self.client.post(
+            self.url_operacion(inventario, "ingreso_mercaderia"),
+            {
+                "cantidad": MAX_BIGINT_POSITIVO - 5 + 1,
+                "observacion": "Ingreso extremo",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].non_field_errors())
+        self.assertContains(response, "capacidad máxima")
+        inventario.refresh_from_db()
+        self.assertEqual(inventario.cantidad_disponible, 5)
+        self.assertEqual(
+            MovimientoInventario.objects.count(),
+            movimientos_iniciales,
+        )
+
     def test_excepciones_de_dominio_se_traducen_a_errores_de_formulario(self):
         inventario = self.crear_inventario()
         url = self.url_operacion(inventario, "ingreso_mercaderia")
@@ -403,6 +443,7 @@ class InventarioAdminOperacionesTests(InventoryAdminTestBase):
             (CantidadMovimientoInvalida(), "cantidad"),
             (ObservacionObligatoria(), "observacion"),
             (StockInsuficiente(), None),
+            (CapacidadInventarioExcedida(), None),
         )
 
         for error, campo in casos:

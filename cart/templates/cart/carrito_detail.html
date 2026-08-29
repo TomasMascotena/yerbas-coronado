@@ -79,6 +79,7 @@
                     <dd>{{ resumen.importe_total|precio_ars }}</dd>
                 </div>
             </dl>
+            <a class="button button--primary button--full" href="{% url 'orders:checkout' %}">Finalizar compra</a>
             <form action="{% url 'cart:vaciar' %}" method="post">
                 {% csrf_token %}
                 <button class="button button--danger button--full" type="submit">Vaciar Carrito</button>

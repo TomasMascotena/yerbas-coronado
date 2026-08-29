@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 
 import inventory.services
 from inventory.exceptions import (
+    CapacidadInventarioExcedida,
     CantidadMovimientoInvalida,
     ObservacionObligatoria,
     StockInsuficiente,
@@ -16,6 +17,7 @@ from inventory.models import (
     TipoMovimientoInventario,
 )
 from inventory.services import (
+    MAX_BIGINT_POSITIVO,
     registrar_ajuste_negativo,
     registrar_ajuste_positivo,
     registrar_ingreso_mercaderia,
@@ -245,6 +247,53 @@ class MovimientosInventarioServiceTests(TestCase):
         self.inventario.refresh_from_db()
         self.assertEqual(self.inventario.cantidad_disponible, 0)
         self.assertFalse(MovimientoInventario.objects.exists())
+
+    def test_servicios_rechazan_cantidad_superior_a_bigint_sin_efectos(self):
+        servicios = (
+            registrar_ingreso_mercaderia,
+            registrar_venta_presencial,
+            registrar_ajuste_positivo,
+            registrar_ajuste_negativo,
+        )
+        for servicio in servicios:
+            with self.subTest(servicio=servicio.__name__):
+                with self.assertRaises(CapacidadInventarioExcedida):
+                    servicio(
+                        inventario_id=self.inventario.pk,
+                        cantidad=2**63,
+                        observacion="Observación válida",
+                    )
+
+        self.inventario.refresh_from_db()
+        self.assertEqual(self.inventario.cantidad_disponible, 0)
+        self.assertFalse(MovimientoInventario.objects.exists())
+
+    def test_movimiento_positivo_rechaza_overflow_y_revierte_completo(self):
+        registrar_ingreso_mercaderia(
+            inventario_id=self.inventario.pk,
+            cantidad=5,
+        )
+        movimientos_iniciales = MovimientoInventario.objects.count()
+        cantidad = MAX_BIGINT_POSITIVO - 5 + 1
+
+        for servicio in (
+            registrar_ingreso_mercaderia,
+            registrar_ajuste_positivo,
+        ):
+            with self.subTest(servicio=servicio.__name__):
+                with self.assertRaises(CapacidadInventarioExcedida):
+                    servicio(
+                        inventario_id=self.inventario.pk,
+                        cantidad=cantidad,
+                        observacion="Reconteo",
+                    )
+
+                self.inventario.refresh_from_db()
+                self.assertEqual(self.inventario.cantidad_disponible, 5)
+                self.assertEqual(
+                    MovimientoInventario.objects.count(),
+                    movimientos_iniciales,
+                )
 
     def test_fallo_al_crear_movimiento_revierte_el_stock(self):
         registrar_ingreso_mercaderia(
