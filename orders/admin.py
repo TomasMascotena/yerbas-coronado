@@ -327,6 +327,7 @@ class PedidoAdmin(admin.ModelAdmin):
             "title": titulo,
             "accion": accion,
             "advertencia": advertencia,
+            "transicion_disponible": pedido.estado == EstadoPedido.PENDIENTE,
             "url_detalle": reverse(
                 "admin:orders_pedido_change",
                 args=(pedido.pk,),

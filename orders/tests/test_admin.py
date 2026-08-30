@@ -588,6 +588,23 @@ class PedidoAdminTests(TestCase):
         self.assertContains(response, "Marcar como entregado")
         self.assertContains(response, "Cancelar Pedido")
 
+    def test_representacion_administrativa_usa_solo_numero_publico(self):
+        pedido, _ = self.crear_pedido(
+            session_key="admin-representacion-pedido",
+            dni="35888135",
+            telefono="341 555 9876",
+            nombre_producto="Pedido representación pública",
+        )
+
+        self.assertEqual(str(pedido), pedido.numero_pedido)
+        self.assertNotIn(pedido.dni_cliente, str(pedido))
+        self.assertNotIn(pedido.telefono_cliente, str(pedido))
+        self.assertNotIn(str(pedido.token_idempotencia), str(pedido))
+
+        response = self.client.get(self.url_detalle(pedido))
+
+        self.assertContains(response, f"<h2>{pedido.numero_pedido}</h2>", html=True)
+
     def test_lectora_no_ve_botones_y_rutas_directas_responden_403(self):
         pedido, _ = self.crear_pedido(
             session_key="admin-lectora-transiciones",
@@ -894,6 +911,81 @@ class PedidoAdminTests(TestCase):
         self.assertContains(cancelacion, "CANCELADO de forma definitiva")
         self.assertContains(cancelacion, "restituirán al Inventario")
         self.assertContains(cancelacion, "Producto a restituir")
+
+    def test_confirmaciones_tienen_un_unico_titulo_principal(self):
+        pedido, _ = self.crear_pedido(
+            session_key="admin-titulo-confirmacion",
+            dni="35888136",
+            nombre_producto="Pedido título único",
+        )
+
+        casos = (
+            (self.url_entregar(pedido), "Marcar Pedido como entregado"),
+            (self.url_cancelar(pedido), "Cancelar Pedido"),
+        )
+        for url, titulo in casos:
+            with self.subTest(titulo=titulo):
+                response = self.client.get(url)
+                contenido = response.content.decode()
+                self.assertEqual(contenido.count("<h1>"), 1)
+                self.assertContains(response, f"<h1>{titulo}</h1>", html=True)
+
+    def test_url_directa_terminal_no_ofrece_formulario_de_confirmacion(self):
+        entregado, producto_entregado = self.crear_pedido(
+            session_key="admin-presentacion-terminal-entregado",
+            dni="35888137",
+            nombre_producto="Pedido presentación entregada",
+        )
+        cancelado, producto_cancelado = self.crear_pedido(
+            session_key="admin-presentacion-terminal-cancelado",
+            dni="35888138",
+            nombre_producto="Pedido presentación cancelada",
+        )
+        marcar_pedido_entregado(pedido_id=entregado.pk)
+        cancelar_pedido(pedido_id=cancelado.pk)
+
+        for pedido, producto, estado in (
+            (entregado, producto_entregado, EstadoPedido.ENTREGADO),
+            (cancelado, producto_cancelado, EstadoPedido.CANCELADO),
+        ):
+            producto.inventario.refresh_from_db()
+            stock = producto.inventario.cantidad_disponible
+            movimientos = set(
+                MovimientoInventario.objects.filter(pedido=pedido).values_list(
+                    "pk", flat=True
+                )
+            )
+            for url in (self.url_entregar(pedido), self.url_cancelar(pedido)):
+                with self.subTest(estado=estado, url=url):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertContains(
+                        response,
+                        "El Pedido ya no admite esa transición.",
+                    )
+                    self.assertContains(
+                        response,
+                        dict(EstadoPedido.choices)[estado],
+                    )
+                    self.assertContains(response, self.url_detalle(pedido))
+                    self.assertNotContains(response, '<form method="post">')
+                    self.assertNotContains(response, "Confirmar:")
+
+                    pedido.refresh_from_db()
+                    producto.inventario.refresh_from_db()
+                    self.assertEqual(pedido.estado, estado)
+                    self.assertEqual(
+                        producto.inventario.cantidad_disponible,
+                        stock,
+                    )
+                    self.assertEqual(
+                        set(
+                            MovimientoInventario.objects.filter(
+                                pedido=pedido
+                            ).values_list("pk", flat=True)
+                        ),
+                        movimientos,
+                    )
 
     def test_entrega_solo_cambia_estado_y_muestra_exito(self):
         pedido, producto = self.crear_pedido(

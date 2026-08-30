@@ -19,8 +19,6 @@
 
 {% block content %}
   <div id="content-main">
-    <h1>{{ title }}</h1>
-
     <dl>
       <dt>Número de Pedido</dt>
       <dd>{{ pedido.numero_pedido }}</dd>
@@ -30,26 +28,31 @@
       <dd>{{ pedido.nombre_cliente }} {{ pedido.apellido_cliente }}</dd>
     </dl>
 
-    <p><strong>{{ advertencia }}</strong></p>
+    {% if transicion_disponible %}
+      <p><strong>{{ advertencia }}</strong></p>
 
-    {% if detalles %}
-      <h2>Productos que serán restituidos</h2>
-      <ul>
-        {% for detalle in detalles %}
-          <li>
-            {{ detalle.nombre_producto }} — {{ detalle.peso_producto }} —
-            {{ detalle.cantidad }} unidades
-          </li>
-        {% endfor %}
-      </ul>
+      {% if detalles %}
+        <h2>Productos que serán restituidos</h2>
+        <ul>
+          {% for detalle in detalles %}
+            <li>
+              {{ detalle.nombre_producto }} — {{ detalle.peso_producto }} —
+              {{ detalle.cantidad }} unidades
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="submit-row">
+          <input type="submit" value="Confirmar: {{ accion }}" class="default">
+          <a href="{{ url_detalle }}" class="closelink">Volver al Pedido</a>
+        </div>
+      </form>
+    {% else %}
+      <p><strong>El Pedido ya no admite esa transición.</strong></p>
+      <p><a href="{{ url_detalle }}">Volver al Pedido</a></p>
     {% endif %}
-
-    <form method="post">
-      {% csrf_token %}
-      <div class="submit-row">
-        <input type="submit" value="Confirmar: {{ accion }}" class="default">
-        <a href="{{ url_detalle }}" class="closelink">Volver al Pedido</a>
-      </div>
-    </form>
   </div>
 {% endblock %}
