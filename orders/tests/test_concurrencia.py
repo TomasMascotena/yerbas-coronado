@@ -9,6 +9,7 @@ from django.db import close_old_connections, connection
 from django.test import TransactionTestCase, override_settings
 
 from cart.models import Carrito
+from inventory.models import MovimientoInventario, TipoMovimientoInventario
 from orders.exceptions import StockInsuficienteParaPedido, TransicionPedidoInvalida
 from orders.models import EstadoPedido, ModalidadEntrega, Pedido
 from orders.models import Cliente
@@ -187,6 +188,45 @@ class ConcurrenciaPedidoTests(TransactionTestCase):
         producto.inventario.refresh_from_db()
         self.assertEqual(producto.inventario.cantidad_disponible, 1)
         self.assertEqual(Pedido.objects.count(), 1)
+        exitosos = [
+            (carrito, resultado)
+            for carrito, resultado in zip(
+                (carrito_a, carrito_b),
+                resultados,
+            )
+            if not isinstance(resultado, Exception)
+        ]
+        fallidos = [
+            carrito
+            for carrito, resultado in zip(
+                (carrito_a, carrito_b),
+                resultados,
+            )
+            if isinstance(resultado, StockInsuficienteParaPedido)
+        ]
+        self.assertEqual(len(exitosos), 1)
+        self.assertEqual(len(fallidos), 1)
+        carrito_ganador, resultado_ganador = exitosos[0]
+        carrito_perdedor = fallidos[0]
+        self.assertFalse(
+            Carrito.objects.filter(pk=carrito_ganador.pk).exists()
+        )
+        self.assertTrue(
+            Carrito.objects.filter(pk=carrito_perdedor.pk).exists()
+        )
+        item_perdedor = carrito_perdedor.items.get()
+        self.assertEqual(item_perdedor.cantidad, 4)
+        self.assertFalse(
+            Pedido.objects.filter(
+                token_idempotencia=carrito_perdedor.token_checkout
+            ).exists()
+        )
+        venta = MovimientoInventario.objects.get(
+            tipo_movimiento=TipoMovimientoInventario.VENTA_PEDIDO,
+        )
+        self.assertEqual(venta.pedido, resultado_ganador.pedido)
+        self.assertEqual(venta.inventario_id, producto.inventario.pk)
+        self.assertEqual(venta.cantidad, 4)
 
     def test_entrega_y_cancelacion_concurrentes_tienen_un_solo_ganador(self):
         pedido, producto = crear_pedido_de_prueba(cantidad=2, stock=10)
@@ -218,36 +258,229 @@ class ConcurrenciaPedidoTests(TransactionTestCase):
         carrito_b, _ = crear_carrito_checkout(
             session_key="sesion-dni-b", nombre="Baldo DNI"
         )
-        barrera = Barrier(2)
+        cliente_primero_creado = Event()
+        liberar_primero = Event()
+        segundo_conectado = Event()
+        pids = {}
+        obtener_cliente_original = (
+            orders_services._obtener_o_crear_cliente_bloqueado
+        )
 
-        def confirmar(carrito, nombre):
+        def obtener_cliente_instrumentado(comprador):
+            resultado = obtener_cliente_original(comprador)
+            if comprador.nombre == "Ana":
+                cliente_primero_creado.set()
+                if not liberar_primero.wait(timeout=10):
+                    raise TimeoutError("No se liberó el primer Checkout.")
+            return resultado
+
+        def confirmar(carrito, *, nombre, apellido, telefono):
             return crear_pedido_desde_carrito(
                 session_key=carrito.session_key,
                 token_idempotencia=carrito.token_checkout,
-                datos_comprador=datos_comprador(nombre=nombre),
+                datos_comprador=datos_comprador(
+                    nombre=nombre,
+                    apellido=apellido,
+                    telefono=telefono,
+                ),
                 modalidad_entrega=ModalidadEntrega.RETIRO,
             )
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futuros = (
-                executor.submit(
-                    self._ejecutar_en_thread,
-                    barrera,
-                    lambda: confirmar(carrito_a, "Ana"),
-                ),
-                executor.submit(
-                    self._ejecutar_en_thread,
-                    barrera,
-                    lambda: confirmar(carrito_b, "Beatriz"),
-                ),
-            )
-            resultados = [f.result(timeout=20) for f in futuros]
+        def ejecutar(clave, funcion):
+            close_old_connections()
+            try:
+                connection.ensure_connection()
+                pids[clave] = connection.connection.info.backend_pid
+                if clave == "segundo":
+                    segundo_conectado.set()
+                return funcion()
+            except Exception as error:
+                return error
+            finally:
+                close_old_connections()
+
+        with patch(
+            "orders.services._obtener_o_crear_cliente_bloqueado",
+            side_effect=obtener_cliente_instrumentado,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                primero = executor.submit(
+                    ejecutar,
+                    "primero",
+                    lambda: confirmar(
+                        carrito_a,
+                        nombre="Ana",
+                        apellido="Primera",
+                        telefono="111111",
+                    ),
+                )
+                self.assertTrue(cliente_primero_creado.wait(timeout=10))
+                segundo = executor.submit(
+                    ejecutar,
+                    "segundo",
+                    lambda: confirmar(
+                        carrito_b,
+                        nombre="Beatriz",
+                        apellido="Segunda",
+                        telefono="222222",
+                    ),
+                )
+                self.assertTrue(segundo_conectado.wait(timeout=10))
+                self._esperar_backend_bloqueado(pids["segundo"])
+                liberar_primero.set()
+                resultados = [
+                    primero.result(timeout=20),
+                    segundo.result(timeout=20),
+                ]
+
         self.assertFalse(any(isinstance(r, Exception) for r in resultados))
         self.assertEqual(Cliente.objects.count(), 1)
+        self.assertEqual(Pedido.objects.count(), 2)
         self.assertEqual(
-            {r.pedido.nombre_cliente for r in resultados}, {"Ana", "Beatriz"}
+            {
+                (
+                    resultado.pedido.nombre_cliente,
+                    resultado.pedido.apellido_cliente,
+                    resultado.pedido.telefono_cliente,
+                )
+                for resultado in resultados
+            },
+            {
+                ("Ana", "Primera", "111111"),
+                ("Beatriz", "Segunda", "222222"),
+            },
         )
-        self.assertIn(Cliente.objects.get().nombre, {"Ana", "Beatriz"})
+        cliente = Cliente.objects.get()
+        self.assertEqual(
+            (cliente.nombre, cliente.apellido, cliente.telefono),
+            ("Beatriz", "Segunda", "222222"),
+        )
+
+    def test_checkouts_multiproducto_inversos_usan_orden_canonico_sin_deadlock(self):
+        from cart.services import agregar_producto
+        from cart.tests.helpers import crear_producto_con_stock
+
+        carrito_a, producto_1 = crear_carrito_checkout(
+            session_key="orden-inverso-a",
+            nombre="Producto uno inverso",
+            cantidad=1,
+            stock=4,
+        )
+        producto_2 = crear_producto_con_stock(
+            nombre="Producto dos inverso",
+            stock=4,
+        )
+        agregar_producto(
+            session_key=carrito_a.session_key,
+            producto_id=producto_2.pk,
+            cantidad=1,
+        )
+        carrito_a.refresh_from_db()
+
+        carrito_b = agregar_producto(
+            session_key="orden-inverso-b",
+            producto_id=producto_2.pk,
+            cantidad=1,
+        ).carrito
+        agregar_producto(
+            session_key=carrito_b.session_key,
+            producto_id=producto_1.pk,
+            cantidad=1,
+        )
+        carrito_b.refresh_from_db()
+
+        self.assertEqual(
+            tuple(
+                carrito_a.items.order_by("pk").values_list(
+                    "producto_id",
+                    flat=True,
+                )
+            ),
+            (producto_1.pk, producto_2.pk),
+        )
+        self.assertEqual(
+            tuple(
+                carrito_b.items.order_by("pk").values_list(
+                    "producto_id",
+                    flat=True,
+                )
+            ),
+            (producto_2.pk, producto_1.pk),
+        )
+
+        barrera = Barrier(2)
+        registrar_orden = Lock()
+        ordenes_productos = []
+        ordenes_inventarios = []
+        obtener_productos_original = orders_services._obtener_productos_bloqueados
+        obtener_inventarios_original = (
+            orders_services._obtener_inventarios_bloqueados
+        )
+
+        def obtener_productos_instrumentado(items):
+            productos = obtener_productos_original(items)
+            with registrar_orden:
+                ordenes_productos.append(tuple(productos))
+            return productos
+
+        def obtener_inventarios_instrumentado(productos):
+            inventarios = obtener_inventarios_original(productos)
+            with registrar_orden:
+                ordenes_inventarios.append(tuple(inventarios))
+            return inventarios
+
+        def confirmar(carrito, dni):
+            return crear_pedido_desde_carrito(
+                session_key=carrito.session_key,
+                token_idempotencia=carrito.token_checkout,
+                datos_comprador=datos_comprador(dni=dni),
+                modalidad_entrega=ModalidadEntrega.RETIRO,
+            )
+
+        with patch(
+            "orders.services._obtener_productos_bloqueados",
+            side_effect=obtener_productos_instrumentado,
+        ), patch(
+            "orders.services._obtener_inventarios_bloqueados",
+            side_effect=obtener_inventarios_instrumentado,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futuros = (
+                    executor.submit(
+                        self._ejecutar_en_thread,
+                        barrera,
+                        lambda: confirmar(carrito_a, "20.000.001"),
+                    ),
+                    executor.submit(
+                        self._ejecutar_en_thread,
+                        barrera,
+                        lambda: confirmar(carrito_b, "20.000.002"),
+                    ),
+                )
+                resultados = [f.result(timeout=20) for f in futuros]
+
+        self.assertFalse(any(isinstance(r, Exception) for r in resultados))
+        self.assertEqual(Pedido.objects.count(), 2)
+        self.assertEqual(
+            MovimientoInventario.objects.filter(
+                tipo_movimiento=TipoMovimientoInventario.VENTA_PEDIDO,
+            ).count(),
+            4,
+        )
+        for producto in (producto_1, producto_2):
+            producto.inventario.refresh_from_db()
+            self.assertEqual(producto.inventario.cantidad_disponible, 2)
+        self.assertEqual(
+            ordenes_productos,
+            [(producto_1.pk, producto_2.pk)] * 2,
+        )
+        inventarios_esperados = tuple(
+            sorted((producto_1.inventario.pk, producto_2.inventario.pk))
+        )
+        self.assertEqual(
+            ordenes_inventarios,
+            [inventarios_esperados] * 2,
+        )
 
     def test_checkout_y_venta_presencial_serializan_el_mismo_stock(self):
         carrito, producto = crear_carrito_checkout(

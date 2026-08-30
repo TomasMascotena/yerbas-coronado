@@ -148,6 +148,71 @@ class CrearPedidoTests(TestCase):
         self.assertEqual(movimiento.cantidad, 3)
         self.assertFalse(Carrito.objects.filter(pk=carrito.pk).exists())
 
+    def test_checkout_de_las_ultimas_unidades_deja_stock_en_cero(self):
+        cantidad = 5
+        carrito, producto = crear_carrito_checkout(
+            session_key="ultimas-unidades",
+            cantidad=cantidad,
+            stock=cantidad,
+        )
+
+        resultado = crear_pedido_desde_carrito(
+            **self._argumentos(carrito)
+        )
+
+        self.assertTrue(resultado.creado)
+        producto.inventario.refresh_from_db()
+        self.assertEqual(producto.inventario.cantidad_disponible, 0)
+        movimiento = MovimientoInventario.objects.get(
+            pedido=resultado.pedido,
+            inventario=producto.inventario,
+            tipo_movimiento=TipoMovimientoInventario.VENTA_PEDIDO,
+        )
+        self.assertEqual(movimiento.cantidad, cantidad)
+        self.assertFalse(Carrito.objects.filter(pk=carrito.pk).exists())
+
+    def test_checkout_multiproducto_crea_un_movimiento_por_inventario(self):
+        carrito, productos = self._crear_carrito_dos_productos(
+            "checkout-multiproducto"
+        )
+
+        resultado = crear_pedido_desde_carrito(
+            **self._argumentos(carrito)
+        )
+
+        pedido = resultado.pedido
+        self.assertTrue(resultado.creado)
+        self.assertEqual(pedido.detalles.count(), 2)
+        self.assertEqual(
+            set(pedido.detalles.values_list("producto_id", "cantidad")),
+            {(productos[0].pk, 2), (productos[1].pk, 3)},
+        )
+        movimientos = list(
+            pedido.movimientos_inventario.filter(
+                tipo_movimiento=TipoMovimientoInventario.VENTA_PEDIDO,
+            ).order_by("inventario_id")
+        )
+        self.assertEqual(len(movimientos), 2)
+        self.assertEqual(
+            {
+                movimiento.inventario_id: movimiento.cantidad
+                for movimiento in movimientos
+            },
+            {
+                productos[0].inventario.pk: 2,
+                productos[1].inventario.pk: 3,
+            },
+        )
+        for producto, stock_esperado in zip(productos, (8, 9)):
+            producto.inventario.refresh_from_db()
+            self.assertEqual(
+                producto.inventario.cantidad_disponible,
+                stock_esperado,
+            )
+        self.assertEqual(pedido.cantidad_total, 5)
+        self.assertEqual(pedido.importe_total, Decimal("22500.00"))
+        self.assertFalse(Carrito.objects.filter(pk=carrito.pk).exists())
+
     def test_envio_crea_exactamente_una_direccion_normalizada(self):
         carrito, _ = crear_carrito_checkout()
         resultado = crear_pedido_desde_carrito(
@@ -350,6 +415,57 @@ class CrearPedidoTests(TestCase):
         self.assertFalse(Pedido.objects.exists())
         self.assertFalse(Cliente.objects.exists())
         self.assertTrue(Carrito.objects.filter(pk=carrito.pk).exists())
+
+    def test_fallo_al_persistir_venta_pedido_revierte_la_operacion_completa(self):
+        carrito, producto = crear_carrito_checkout(
+            session_key="fallo-save-venta-pedido",
+            cantidad=3,
+            stock=10,
+        )
+        snapshot = self._snapshot_rollback(carrito, (producto,))
+        stocks_observados_antes_del_fallo = []
+        guardar_movimiento_original = MovimientoInventario.save
+        direccion = DatosDireccionEnvio(
+            calle="San Martín",
+            numero="123",
+            localidad="Posadas",
+            provincia="Misiones",
+        )
+
+        def fallar_al_guardar_venta(instancia, *args, **kwargs):
+            if (
+                instancia.tipo_movimiento
+                == TipoMovimientoInventario.VENTA_PEDIDO
+            ):
+                instancia.inventario.refresh_from_db()
+                stocks_observados_antes_del_fallo.append(
+                    instancia.inventario.cantidad_disponible
+                )
+                raise RuntimeError("Fallo al persistir VENTA_PEDIDO")
+            return guardar_movimiento_original(instancia, *args, **kwargs)
+
+        with patch(
+            "inventory.services.MovimientoInventario.save",
+            new=fallar_al_guardar_venta,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Fallo al persistir VENTA_PEDIDO",
+            ):
+                crear_pedido_desde_carrito(
+                    **self._argumentos(
+                        carrito,
+                        modalidad_entrega=ModalidadEntrega.ENVIO_DOMICILIO,
+                        direccion_envio=direccion,
+                    )
+                )
+
+        self.assertEqual(stocks_observados_antes_del_fallo, [7])
+        self._assert_rollback_completo(
+            carrito,
+            (producto,),
+            snapshot,
+        )
 
     def test_carrito_inexistente_no_deja_efectos(self):
         with self.assertRaises(CarritoInexistente):
