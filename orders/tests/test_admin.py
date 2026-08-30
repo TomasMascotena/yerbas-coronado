@@ -7,7 +7,9 @@ from unittest.mock import patch
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.db import connection
 from django.test import Client, RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -605,6 +607,23 @@ class PedidoAdminTests(TestCase):
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, EstadoPedido.PENDIENTE)
 
+    def test_usuario_anonimo_no_accede_a_rutas_de_transicion(self):
+        pedido, _ = self.crear_pedido(
+            session_key="admin-anonimo-transiciones",
+            dni="35888129",
+            nombre_producto="Pedido transición anónima",
+        )
+        self.client.logout()
+
+        for metodo in (self.client.get, self.client.head, self.client.post):
+            for url in (self.url_entregar(pedido), self.url_cancelar(pedido)):
+                with self.subTest(metodo=metodo.__name__, url=url):
+                    response = metodo(url)
+                    self.assertEqual(response.status_code, 302)
+                    self.assertIn(reverse("admin:login"), response.url)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, EstadoPedido.PENDIENTE)
+
     def test_permiso_change_autoriza_operar_pero_no_edicion_directa(self):
         pedido, _ = self.crear_pedido(
             session_key="admin-operadora-change",
@@ -631,6 +650,31 @@ class PedidoAdminTests(TestCase):
         self.assertEqual(transition.status_code, 302)
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, EstadoPedido.ENTREGADO)
+
+    def test_permiso_change_muestra_inlines_sin_permisos_individuales(self):
+        pedido, producto = self.crear_pedido(
+            session_key="admin-operadora-inlines",
+            dni="35888130",
+            modalidad=ModalidadEntrega.ENVIO_DOMICILIO,
+            direccion=DatosDireccionEnvio(
+                calle="Entre Ríos",
+                numero="200",
+                localidad="Rosario",
+                provincia="Santa Fe",
+            ),
+            nombre_producto="Pedido operadora con inlines",
+        )
+        self.client.force_login(self.operadora)
+
+        response = self.client.get(self.url_detalle(pedido))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Dirección de envío histórica")
+        self.assertContains(response, "Entre Ríos")
+        self.assertContains(response, "Detalles históricos del Pedido")
+        self.assertContains(response, producto.nombre)
+        self.assertContains(response, "Movimientos de Inventario asociados")
+        self.assertContains(response, "Venta por pedido")
 
     def test_pedidos_terminales_no_muestran_transiciones(self):
         entregado, _ = self.crear_pedido(
@@ -709,6 +753,55 @@ class PedidoAdminTests(TestCase):
                         movimientos,
                     )
 
+    def test_get_y_head_de_pedidos_terminales_no_producen_escrituras(self):
+        entregado, producto_entregado = self.crear_pedido(
+            session_key="admin-get-terminal-entregado",
+            dni="35888131",
+            nombre_producto="Pedido GET entregado",
+        )
+        cancelado, producto_cancelado = self.crear_pedido(
+            session_key="admin-get-terminal-cancelado",
+            dni="35888132",
+            nombre_producto="Pedido GET cancelado",
+        )
+        marcar_pedido_entregado(pedido_id=entregado.pk)
+        cancelar_pedido(pedido_id=cancelado.pk)
+
+        for pedido, producto, estado in (
+            (entregado, producto_entregado, EstadoPedido.ENTREGADO),
+            (cancelado, producto_cancelado, EstadoPedido.CANCELADO),
+        ):
+            producto.inventario.refresh_from_db()
+            stock = producto.inventario.cantidad_disponible
+            movimientos = set(
+                MovimientoInventario.objects.filter(pedido=pedido).values_list(
+                    "pk", flat=True
+                )
+            )
+            for metodo in (self.client.get, self.client.head):
+                for url in (self.url_entregar(pedido), self.url_cancelar(pedido)):
+                    with self.subTest(
+                        estado=estado,
+                        metodo=metodo.__name__,
+                        url=url,
+                    ):
+                        self.assertEqual(metodo(url).status_code, 200)
+                        pedido.refresh_from_db()
+                        producto.inventario.refresh_from_db()
+                        self.assertEqual(pedido.estado, estado)
+                        self.assertEqual(
+                            producto.inventario.cantidad_disponible,
+                            stock,
+                        )
+                        self.assertEqual(
+                            set(
+                                MovimientoInventario.objects.filter(
+                                    pedido=pedido
+                                ).values_list("pk", flat=True)
+                            ),
+                            movimientos,
+                        )
+
     def test_metodos_distintos_de_get_head_post_son_rechazados(self):
         pedido, _ = self.crear_pedido(
             session_key="admin-metodo-no-permitido",
@@ -758,6 +851,25 @@ class PedidoAdminTests(TestCase):
                 tipo_movimiento=TipoMovimientoInventario.CANCELACION_PEDIDO,
             ).exists()
         )
+
+    def test_error_inesperado_no_se_convierte_en_mensaje_controlado(self):
+        pedido, _ = self.crear_pedido(
+            session_key="admin-error-inesperado",
+            dni="35888133",
+            nombre_producto="Pedido error inesperado",
+        )
+
+        with patch(
+            "orders.admin.marcar_pedido_entregado",
+            side_effect=RuntimeError("Fallo técnico de prueba"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Fallo técnico de prueba"):
+                self.client.post(self.url_entregar(pedido))
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, EstadoPedido.PENDIENTE)
+        detalle = self.client.get(self.url_detalle(pedido))
+        self.assertNotContains(detalle, "correctamente")
 
     def test_confirmaciones_muestran_snapshots_y_advertencias_necesarias(self):
         pedido, _ = self.crear_pedido(
@@ -931,6 +1043,7 @@ class PedidoAdminTests(TestCase):
             response,
             "El Pedido fue cancelado y el Inventario fue restituido correctamente.",
         )
+        self.assertContains(response, "Cancelación de pedido")
         self.assertNotContains(response, self.url_cancelar(pedido))
         pedido.refresh_from_db()
         producto.inventario.refresh_from_db()
@@ -953,6 +1066,42 @@ class PedidoAdminTests(TestCase):
             tipo_movimiento=TipoMovimientoInventario.CANCELACION_PEDIDO,
         )
         self.assertEqual(cancelacion.cantidad, 3)
+
+    def test_listado_y_detalle_no_crecen_en_consultas_por_cantidad_de_lineas(self):
+        pedido_simple, _ = self.crear_pedido(
+            session_key="admin-consultas-simple",
+            dni="35888134",
+            nombre_producto="Pedido consultas simple",
+        )
+        self.client.get(self.lista_url)
+        self.client.get(self.url_detalle(pedido_simple))
+
+        with CaptureQueriesContext(connection) as consultas_lista_simple:
+            self.client.get(self.lista_url)
+        with CaptureQueriesContext(connection) as consultas_detalle_simple:
+            self.client.get(self.url_detalle(pedido_simple))
+
+        pedido_multiple, _, _ = self.crear_pedido_con_dos_productos()
+        for indice in range(3):
+            self.crear_pedido(
+                session_key=f"admin-consultas-extra-{indice}",
+                dni=f"358882{indice:02d}",
+                nombre_producto=f"Pedido consultas extra {indice}",
+            )
+
+        with CaptureQueriesContext(connection) as consultas_lista_multiple:
+            self.client.get(self.lista_url)
+        with CaptureQueriesContext(connection) as consultas_detalle_multiple:
+            self.client.get(self.url_detalle(pedido_multiple))
+
+        self.assertEqual(
+            len(consultas_lista_multiple),
+            len(consultas_lista_simple),
+        )
+        self.assertEqual(
+            len(consultas_detalle_multiple),
+            len(consultas_detalle_simple),
+        )
 
     def test_cancelacion_multiproducto_restituye_cada_inventario(self):
         pedido, primero, segundo = self.crear_pedido_con_dos_productos()
