@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+    &rsaquo;
+    <a href="{% url 'admin:app_list' app_label=opts.app_label %}">
+      {{ opts.app_config.verbose_name }}
+    </a>
+    &rsaquo;
+    <a href="{% url 'admin:orders_pedido_changelist' %}">
+      {{ opts.verbose_name_plural|capfirst }}
+    </a>
+    &rsaquo; <a href="{{ url_detalle }}">{{ pedido.numero_pedido }}</a>
+    &rsaquo; {{ title }}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <dl>
+      <dt>Número de Pedido</dt>
+      <dd>{{ pedido.numero_pedido }}</dd>
+      <dt>Estado actual</dt>
+      <dd>{{ pedido.get_estado_display }}</dd>
+      <dt>Comprador</dt>
+      <dd>{{ pedido.nombre_cliente }} {{ pedido.apellido_cliente }}</dd>
+    </dl>
+
+    {% if transicion_disponible %}
+      <p><strong>{{ advertencia }}</strong></p>
+
+      {% if detalles %}
+        <h2>Productos que serán restituidos</h2>
+        <ul>
+          {% for detalle in detalles %}
+            <li>
+              {{ detalle.nombre_producto }} — {{ detalle.peso_producto }} —
+              {{ detalle.cantidad }} unidades
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="submit-row">
+          <input type="submit" value="Confirmar: {{ accion }}" class="default">
+          <a href="{{ url_detalle }}" class="closelink">Volver al Pedido</a>
+        </div>
+      </form>
+    {% else %}
+      <p><strong>El Pedido ya no admite esa transición.</strong></p>
+      <p><a href="{{ url_detalle }}">Volver al Pedido</a></p>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -108,6 +108,9 @@ class Pedido(_ModeloHistoricoInmutable):
     dni_cliente = models.CharField(max_length=20, editable=False)
     telefono_cliente = models.CharField(max_length=32, editable=False)
 
+    def __str__(self):
+        return self.numero_pedido
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

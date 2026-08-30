@@ -1,0 +1,11 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if puede_transicionar_pedido %}
+    <li><a href="{{ url_marcar_entregado }}">Marcar como entregado</a></li>
+    <li><a href="{{ url_cancelar_pedido }}">Cancelar Pedido</a></li>
+  {% elif pedido_estado_terminal %}
+    <li><span>Estado terminal</span></li>
+  {% endif %}
+{% endblock %}
