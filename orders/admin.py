@@ -11,7 +11,13 @@ from orders.exceptions import (
     HistorialMovimientosCorrupto,
     TransicionPedidoInvalida,
 )
-from orders.models import DetallePedido, DireccionEnvio, EstadoPedido, Pedido
+from orders.models import (
+    Cliente,
+    DetallePedido,
+    DireccionEnvio,
+    EstadoPedido,
+    Pedido,
+)
 from orders.services import cancelar_pedido, marcar_pedido_entregado
 
 
@@ -92,6 +98,31 @@ class MovimientoPedidoInline(_InlineHistoricoSoloLectura, admin.TabularInline):
             .get_queryset(request)
             .select_related("inventario", "inventario__producto")
         )
+
+
+@admin.register(Cliente)
+class ClienteAdmin(admin.ModelAdmin):
+    list_display = ("dni", "nombre", "apellido", "telefono")
+    search_fields = ("dni", "nombre", "apellido", "telefono")
+    ordering = ("apellido", "nombre", "dni")
+    fieldsets = (
+        ("Identificación", {"fields": ("dni",)}),
+        (
+            "Datos de contacto",
+            {"fields": ("nombre", "apellido", "telefono")},
+        ),
+    )
+    readonly_fields = ("dni", "nombre", "apellido", "telefono")
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Pedido)
