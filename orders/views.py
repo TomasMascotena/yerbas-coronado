@@ -85,7 +85,7 @@ def _render_checkout(request, *, formulario, contexto):
             "cart_resumen_global": contexto.resumen,
         },
     )
-    respuesta["Referrer-Policy"] = "no-referrer"
+    respuesta["Referrer-Policy"] = "same-origin"
     return respuesta
 
 
