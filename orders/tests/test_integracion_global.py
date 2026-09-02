@@ -5,7 +5,8 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase, override_settings
+from django.db import connection
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from cart.models import Carrito, ItemCarrito
@@ -29,11 +30,7 @@ def tearDownModule():
     shutil.rmtree(MEDIA_ROOT_PRUEBAS, ignore_errors=True)
 
 
-@override_settings(
-    MEDIA_ROOT=MEDIA_ROOT_PRUEBAS,
-    WHATSAPP_BUSINESS_NUMBER="5491112345678",
-)
-class IntegracionGlobalTests(TestCase):
+class FlujoPublicoMixin:
     def datos_checkout(self, carrito):
         return {
             "token_checkout": str(carrito.token_checkout),
@@ -73,6 +70,12 @@ class IntegracionGlobalTests(TestCase):
         )
         return pedido, respuesta
 
+
+@override_settings(
+    MEDIA_ROOT=MEDIA_ROOT_PRUEBAS,
+    WHATSAPP_BUSINESS_NUMBER="5491112345678",
+)
+class IntegracionGlobalTests(FlujoPublicoMixin, TestCase):
     def test_flujo_publico_completo_conserva_precios_y_genera_historial(self):
         producto = crear_producto_con_stock(
             nombre="Canarias Integración",
@@ -236,16 +239,43 @@ class IntegracionGlobalTests(TestCase):
             cantidad_movimientos,
         )
 
-    @override_settings(DEBUG=False)
+
+@override_settings(
+    DEBUG=False,
+    MEDIA_ROOT=MEDIA_ROOT_PRUEBAS,
+    WHATSAPP_BUSINESS_NUMBER="5491112345678",
+)
+class DurabilidadPostCommitTests(FlujoPublicoMixin, TransactionTestCase):
     def test_fallo_posterior_de_whatsapp_no_revierte_checkout_confirmado(self):
         producto = crear_producto_con_stock(nombre="Producto Durable", stock=5)
-        carrito, _ = self.agregar_desde_catalogo(producto, cantidad=2)
+        carrito, item = self.agregar_desde_catalogo(producto, cantidad=2)
         pedido, _ = self.confirmar_checkout(carrito)
+        self.assertFalse(connection.in_atomic_block)
+
+        detalle = DetallePedido.objects.get(pedido=pedido)
         producto.inventario.refresh_from_db()
         stock_confirmado = producto.inventario.cantidad_disponible
-        movimientos_confirmados = MovimientoInventario.objects.filter(
-            pedido=pedido
-        ).count()
+        movimientos_confirmados = list(
+            MovimientoInventario.objects.filter(pedido=pedido).values_list(
+                "pk",
+                "tipo_movimiento",
+                "cantidad",
+            )
+        )
+        self.assertEqual(pedido.estado, EstadoPedido.PENDIENTE)
+        self.assertEqual(detalle.cantidad, 2)
+        self.assertEqual(detalle.subtotal, Decimal("10000.00"))
+        self.assertEqual(stock_confirmado, 3)
+        self.assertEqual(len(movimientos_confirmados), 1)
+        _, tipo_movimiento, cantidad_movimiento = movimientos_confirmados[0]
+        self.assertEqual(tipo_movimiento, TipoMovimientoInventario.VENTA_PEDIDO)
+        self.assertEqual(cantidad_movimiento, 2)
+        self.assertFalse(Carrito.objects.filter(pk=carrito.pk).exists())
+        self.assertFalse(ItemCarrito.objects.filter(pk=item.pk).exists())
+        self.assertFalse(connection.in_atomic_block)
+
+        connection.close()
+        self.assertFalse(connection.in_atomic_block)
 
         cliente = Client(raise_request_exception=False)
         cliente.cookies = self.client.cookies
@@ -264,16 +294,24 @@ class IntegracionGlobalTests(TestCase):
             status_code=500,
         )
         pedido.refresh_from_db()
+        detalle.refresh_from_db()
         producto.inventario.refresh_from_db()
         self.assertEqual(pedido.estado, EstadoPedido.PENDIENTE)
+        self.assertEqual(detalle.cantidad, 2)
+        self.assertEqual(detalle.subtotal, Decimal("10000.00"))
         self.assertEqual(
             producto.inventario.cantidad_disponible,
             stock_confirmado,
         )
-        self.assertEqual(stock_confirmado, 3)
         self.assertEqual(
-            MovimientoInventario.objects.filter(pedido=pedido).count(),
+            list(
+                MovimientoInventario.objects.filter(pedido=pedido).values_list(
+                    "pk",
+                    "tipo_movimiento",
+                    "cantidad",
+                )
+            ),
             movimientos_confirmados,
         )
-        self.assertEqual(movimientos_confirmados, 1)
         self.assertFalse(Carrito.objects.filter(pk=carrito.pk).exists())
+        self.assertFalse(ItemCarrito.objects.filter(pk=item.pk).exists())
