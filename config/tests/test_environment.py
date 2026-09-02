@@ -292,6 +292,30 @@ print(settings.SECURE_PROXY_SSL_HEADER)
         self.assertIn("HTTP_X_FORWARDED_PROTO", result.stdout)
         self.assertIn("https", result.stdout)
 
+    def test_logging_de_seguridad_conserva_warnings_sin_duplicar_ni_filtrar_secretos(self):
+        result = self.run_python(
+            """
+import logging
+import logging.config
+from django.conf import settings
+
+logging.config.dictConfig(settings.LOGGING)
+logger = logging.getLogger("django.security.csrf")
+logger.warning("security-warning-marker")
+logger.error("security-error-marker")
+logger.info("security-info-marker")
+""",
+            environment=production_environment(),
+        )
+
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertEqual(output.count("security-warning-marker"), 1)
+        self.assertEqual(output.count("security-error-marker"), 1)
+        self.assertNotIn("security-info-marker", output)
+        self.assertNotIn(SAFE_PRODUCTION_SECRET, output)
+        self.assertNotIn("not-a-real-password", output)
+
     def test_static_root_esta_definido_y_separado_de_media(self):
         self.assertEqual(settings.STATIC_ROOT, BASE_DIR / "staticfiles")
         self.assertEqual(settings.MEDIA_ROOT, BASE_DIR / "media")

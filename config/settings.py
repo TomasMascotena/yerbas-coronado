@@ -196,7 +196,7 @@ if IS_PRODUCTION:
         "loggers": {
             "django.security": {
                 "handlers": ["console"],
-                "level": "ERROR",
+                "level": "WARNING",
                 "propagate": False,
             },
         },

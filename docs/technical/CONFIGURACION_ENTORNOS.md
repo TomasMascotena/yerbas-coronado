@@ -70,6 +70,12 @@ Producción activa redirección HTTPS, cookies de sesión y CSRF seguras,
 sniffing, `Referrer-Policy: strict-origin-when-cross-origin`, bloqueo de frames
 y HSTS. `DEBUG=False` evita que las páginas técnicas de Django se expongan.
 
+El logging de producción conserva por consola los eventos `WARNING` y `ERROR`
+de `django.security`, incluidos los rechazos CSRF, sin propagarlos al logger
+raíz para evitar duplicados. Los eventos `DEBUG` e `INFO` de seguridad se
+descartan y la configuración no incorpora cuerpos de solicitudes ni valores
+sensibles a los mensajes.
+
 HSTS puede dificultar la recuperación de una configuración HTTPS incorrecta.
 Antes de aumentar su duración, habilitar subdominios o solicitar preload, se
 deben verificar el certificado, HTTPS y el control de todos los subdominios.
