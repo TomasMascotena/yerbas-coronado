@@ -4,6 +4,7 @@ from django.http import Http404, HttpResponseNotAllowed
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils.html import format_html
 
 from inventory.models import MovimientoInventario
 from orders.exceptions import (
@@ -11,8 +12,23 @@ from orders.exceptions import (
     HistorialMovimientosCorrupto,
     TransicionPedidoInvalida,
 )
-from orders.models import DetallePedido, DireccionEnvio, EstadoPedido, Pedido
+from orders.models import (
+    Cliente,
+    DetallePedido,
+    DireccionEnvio,
+    EstadoPedido,
+    Pedido,
+)
 from orders.services import cancelar_pedido, marcar_pedido_entregado
+
+
+def _puede_consultar_modelo(request, model):
+    opts = model._meta
+    return request.user.has_perm(
+        f"{opts.app_label}.view_{opts.model_name}"
+    ) or request.user.has_perm(
+        f"{opts.app_label}.change_{opts.model_name}"
+    )
 
 
 class _InlineHistoricoSoloLectura:
@@ -94,6 +110,65 @@ class MovimientoPedidoInline(_InlineHistoricoSoloLectura, admin.TabularInline):
         )
 
 
+class PedidoClienteInline(admin.TabularInline):
+    model = Pedido
+    fk_name = "cliente"
+    fields = (
+        "fecha_hora_creacion",
+        "estado",
+        "modalidad_entrega",
+        "cantidad_total",
+        "importe_total",
+    )
+    readonly_fields = fields
+    ordering = ("-fecha_hora_creacion", "-pk")
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    verbose_name_plural = "Historial de Pedidos"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).order_by(*self.ordering)
+
+    def has_view_permission(self, request, obj=None):
+        return _puede_consultar_modelo(request, Pedido)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Cliente)
+class ClienteAdmin(admin.ModelAdmin):
+    list_display = ("dni", "nombre", "apellido", "telefono")
+    search_fields = ("dni", "nombre", "apellido", "telefono")
+    ordering = ("apellido", "nombre", "dni")
+    fieldsets = (
+        ("Identificación", {"fields": ("dni",)}),
+        (
+            "Datos de contacto",
+            {"fields": ("nombre", "apellido", "telefono")},
+        ),
+    )
+    readonly_fields = ("dni", "nombre", "apellido", "telefono")
+    inlines = (PedidoClienteInline,)
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Pedido)
 class PedidoAdmin(admin.ModelAdmin):
     change_form_template = "admin/orders/pedido/change_form.html"
@@ -133,10 +208,13 @@ class PedidoAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Cliente actual asociado",
+            {"fields": ("cliente_actual",)},
+        ),
+        (
             "Comprador histórico",
             {
                 "fields": (
-                    "cliente",
                     "nombre_cliente",
                     "apellido_cliente",
                     "dni_cliente",
@@ -160,7 +238,8 @@ class PedidoAdmin(admin.ModelAdmin):
         "numero_pedido",
         "fecha_hora_creacion",
         "estado",
-        "cliente",
+        "cliente_actual",
+        "cliente_actual_enlace",
         "nombre_cliente",
         "apellido_cliente",
         "dni_cliente",
@@ -171,6 +250,36 @@ class PedidoAdmin(admin.ModelAdmin):
         "observaciones",
     )
     actions = None
+
+    @admin.display(description="Cliente actual asociado")
+    def cliente_actual(self, pedido):
+        return "Cliente asociado"
+
+    @admin.display(description="Cliente actual asociado")
+    def cliente_actual_enlace(self, pedido):
+        cliente = pedido.cliente
+        return format_html(
+            '<a href="{}">{} — {} {}</a>',
+            reverse("admin:orders_cliente_change", args=(cliente.pk,)),
+            cliente.dni,
+            cliente.nombre,
+            cliente.apellido,
+        )
+
+    def get_fieldsets(self, request, obj=None):
+        campo_cliente = (
+            "cliente_actual_enlace"
+            if _puede_consultar_modelo(request, Cliente)
+            else "cliente_actual"
+        )
+        return (
+            self.fieldsets[0],
+            (
+                self.fieldsets[1][0],
+                {"fields": (campo_cliente,)},
+            ),
+            *self.fieldsets[2:],
+        )
 
     def get_queryset(self, request):
         return (
