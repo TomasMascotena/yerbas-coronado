@@ -23,43 +23,117 @@ def _headless_desde_entorno():
 
 
 class BrowserE2ETestCase(StaticLiveServerTestCase):
+    browser = None
+    _playwright = None
+    _settings = None
+    _media_root = None
+    _django_teardown_pendiente = False
+    _restaurar_entorno_pendiente = False
+    _django_allow_async_unsafe = None
+
     @classmethod
     def setUpClass(cls):
+        cls.browser = None
+        cls._playwright = None
+        cls._settings = None
+        cls._media_root = None
+        cls._django_teardown_pendiente = False
+        cls._restaurar_entorno_pendiente = False
         cls._django_allow_async_unsafe = os.environ.get(
             "DJANGO_ALLOW_ASYNC_UNSAFE"
         )
+        cls._restaurar_entorno_pendiente = True
         # La API sync de Playwright mantiene un loop interno aunque estos tests
         # y el ORM se ejecuten secuencialmente en este hilo.
         os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-        cls._media_root = tempfile.mkdtemp(prefix="yerbas-e2e-media-")
-        cls._settings = override_settings(
-            MEDIA_ROOT=cls._media_root,
-            WHATSAPP_BUSINESS_NUMBER="5491112345678",
-        )
-        cls._settings.enable()
-        super().setUpClass()
         try:
+            cls._media_root = tempfile.mkdtemp(prefix="yerbas-e2e-media-")
+            cls._settings = override_settings(
+                MEDIA_ROOT=cls._media_root,
+                WHATSAPP_BUSINESS_NUMBER="5491112345678",
+            )
+            cls._settings.enable()
+            cls._django_teardown_pendiente = True
+            super().setUpClass()
             cls._playwright = sync_playwright().start()
             cls.browser = cls._playwright.chromium.launch(
                 headless=_headless_desde_entorno()
             )
-        except Exception:
-            super().tearDownClass()
-            cls._settings.disable()
-            shutil.rmtree(cls._media_root, ignore_errors=True)
-            cls._restaurar_async_unsafe()
+        except BaseException as error_original:
+            try:
+                cls._liberar_recursos()
+            except BaseException as error_limpieza:
+                error_original.add_note(
+                    "También falló la limpieza de recursos E2E: "
+                    f"{error_limpieza!r}"
+                )
             raise
 
     @classmethod
     def tearDownClass(cls):
+        cls._liberar_recursos()
+
+    @classmethod
+    def _liberar_recursos(cls):
+        errores = []
+        browser = cls.browser
+        cls.browser = None
         try:
-            cls.browser.close()
-            cls._playwright.stop()
+            if browser is not None:
+                browser.close()
+        except BaseException as error:
+            errores.append(error)
         finally:
-            super().tearDownClass()
-            cls._settings.disable()
-            shutil.rmtree(cls._media_root, ignore_errors=True)
-            cls._restaurar_async_unsafe()
+            playwright = cls._playwright
+            cls._playwright = None
+            try:
+                if playwright is not None:
+                    playwright.stop()
+            except BaseException as error:
+                errores.append(error)
+            finally:
+                django_teardown_pendiente = cls._django_teardown_pendiente
+                cls._django_teardown_pendiente = False
+                try:
+                    if django_teardown_pendiente:
+                        super().tearDownClass()
+                except BaseException as error:
+                    errores.append(error)
+                finally:
+                    settings_override = cls._settings
+                    cls._settings = None
+                    try:
+                        if settings_override is not None:
+                            settings_override.disable()
+                    except BaseException as error:
+                        errores.append(error)
+                    finally:
+                        media_root = cls._media_root
+                        cls._media_root = None
+                        try:
+                            if media_root and os.path.exists(media_root):
+                                shutil.rmtree(media_root)
+                        except BaseException as error:
+                            errores.append(error)
+                        finally:
+                            restaurar_entorno = (
+                                cls._restaurar_entorno_pendiente
+                            )
+                            cls._restaurar_entorno_pendiente = False
+                            try:
+                                if restaurar_entorno:
+                                    cls._restaurar_async_unsafe()
+                            except BaseException as error:
+                                errores.append(error)
+
+        if errores:
+            error_principal = errores[0]
+            for error_adicional in errores[1:]:
+                error_principal.add_note(
+                    "También falló otra etapa de limpieza E2E: "
+                    f"{error_adicional!r}"
+                )
+            raise error_principal
 
     @classmethod
     def _restaurar_async_unsafe(cls):
