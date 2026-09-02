@@ -114,7 +114,6 @@ class ClienteHistorialAdminTests(TestCase):
         self.assertEqual(
             inline.fields,
             (
-                "numero_pedido_enlace",
                 "fecha_hora_creacion",
                 "estado",
                 "modalidad_entrega",
@@ -126,6 +125,7 @@ class ClienteHistorialAdminTests(TestCase):
         self.assertEqual(inline.ordering, ("-fecha_hora_creacion", "-pk"))
         self.assertEqual(inline.extra, 0)
         self.assertFalse(inline.can_delete)
+        self.assertTrue(inline.show_change_link)
         self.assertFalse(inline.has_add_permission(request))
         self.assertFalse(inline.has_change_permission(request))
         self.assertFalse(inline.has_delete_permission(request))
@@ -156,8 +156,8 @@ class ClienteHistorialAdminTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Historial de Pedidos")
-        self.assertContains(response, primero.numero_pedido)
-        self.assertContains(response, segundo.numero_pedido)
+        self.assertContains(response, primero.numero_pedido, count=1)
+        self.assertContains(response, segundo.numero_pedido, count=1)
         self.assertNotContains(response, ajeno.numero_pedido)
         self.assertEqual(
             list(formset.queryset),
@@ -211,7 +211,7 @@ class ClienteHistorialAdminTests(TestCase):
             response,
             f'href="{self.url_pedido(pedido)}"',
         )
-        self.assertContains(response, pedido.numero_pedido)
+        self.assertContains(response, pedido.numero_pedido, count=1)
         self.assertEqual(self.client.get(self.url_pedido(pedido)).status_code, 200)
 
     def test_sin_permiso_pedido_no_muestra_historial_ni_enlaces(self):

@@ -114,7 +114,6 @@ class PedidoClienteInline(admin.TabularInline):
     model = Pedido
     fk_name = "cliente"
     fields = (
-        "numero_pedido_enlace",
         "fecha_hora_creacion",
         "estado",
         "modalidad_entrega",
@@ -125,16 +124,8 @@ class PedidoClienteInline(admin.TabularInline):
     ordering = ("-fecha_hora_creacion", "-pk")
     extra = 0
     can_delete = False
-    show_change_link = False
+    show_change_link = True
     verbose_name_plural = "Historial de Pedidos"
-
-    @admin.display(description="Número de Pedido", ordering="numero_pedido")
-    def numero_pedido_enlace(self, pedido):
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse("admin:orders_pedido_change", args=(pedido.pk,)),
-            pedido.numero_pedido,
-        )
 
     def get_queryset(self, request):
         return super().get_queryset(request).order_by(*self.ordering)

@@ -161,6 +161,7 @@ class ClienteAdminHardeningTests(TestCase):
                         self.assertContains(
                             detalle_cliente,
                             pedido.numero_pedido,
+                            count=1,
                         )
                     else:
                         self.assertNotContains(
