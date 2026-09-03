@@ -31,6 +31,7 @@ from config.environment import (
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENVIRONMENT = parse_environment(os.environ)
+IS_PRODUCTION = ENVIRONMENT == PRODUCTION
 if ENVIRONMENT == "development":
     load_dotenv(BASE_DIR / ".env")
 
@@ -65,7 +66,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+]
+if IS_PRODUCTION:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -163,7 +167,6 @@ WHATSAPP_BUSINESS_NUMBER = os.getenv("WHATSAPP_BUSINESS_NUMBER", "")
 
 # Security settings are deliberately strict only in production so local HTTP
 # development remains straightforward.
-IS_PRODUCTION = ENVIRONMENT == PRODUCTION
 SECURE_SSL_REDIRECT = IS_PRODUCTION
 SECURE_REDIRECT_EXEMPT = [r"^health/live/$", r"^health/ready/$"]
 SESSION_COOKIE_SECURE = IS_PRODUCTION

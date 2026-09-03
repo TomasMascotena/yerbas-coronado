@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import runpy
@@ -15,6 +16,31 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class DeploymentConfigurationTests(SimpleTestCase):
+    def _settings_for_environment(self, environment):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import json; "
+                    "from django.conf import settings; "
+                    "print(json.dumps({"
+                    "'middleware': settings.MIDDLEWARE, "
+                    "'staticfiles_backend': "
+                    "settings.STORAGES['staticfiles']['BACKEND']"
+                    "}))"
+                ),
+            ],
+            cwd=BASE_DIR,
+            env=production_environment(DJANGO_ENV=environment),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout), result.stderr
+
     def test_contenedor_separa_build_inicio_y_readiness(self):
         dockerfile = (BASE_DIR / "Dockerfile").read_text(encoding="utf-8")
 
@@ -49,34 +75,36 @@ class DeploymentConfigurationTests(SimpleTestCase):
             with self.assertRaisesRegex(RuntimeError, "GUNICORN_WORKERS"):
                 runpy.run_path(BASE_DIR / "gunicorn.conf.py")
 
-    def test_whitenoise_sirve_solo_estaticos_versionados(self):
-        self.assertEqual(
-            settings.MIDDLEWARE[1],
-            "whitenoise.middleware.WhiteNoiseMiddleware",
-        )
-        self.assertEqual(
-            settings.STORAGES["staticfiles"]["BACKEND"],
-            "django.contrib.staticfiles.storage.StaticFilesStorage",
-        )
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                (
-                    "from django.conf import settings; "
-                    "print(settings.STORAGES['staticfiles']['BACKEND'])"
-                ),
-            ],
-            cwd=BASE_DIR,
-            env=production_environment(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    def test_whitenoise_esta_ausente_fuera_de_produccion(self):
+        for environment in ("development", "test"):
+            with self.subTest(environment=environment):
+                configuration, stderr = self._settings_for_environment(environment)
+                self.assertNotIn(
+                    "whitenoise.middleware.WhiteNoiseMiddleware",
+                    configuration["middleware"],
+                )
+                self.assertEqual(
+                    configuration["middleware"][0],
+                    "django.middleware.security.SecurityMiddleware",
+                )
+                self.assertEqual(
+                    configuration["staticfiles_backend"],
+                    "django.contrib.staticfiles.storage.StaticFilesStorage",
+                )
+                self.assertNotIn("No directory at", stderr)
 
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def test_whitenoise_sirve_estaticos_versionados_en_produccion(self):
+        configuration, _stderr = self._settings_for_environment("production")
+
         self.assertEqual(
-            result.stdout.strip(),
+            configuration["middleware"][:2],
+            [
+                "django.middleware.security.SecurityMiddleware",
+                "whitenoise.middleware.WhiteNoiseMiddleware",
+            ],
+        )
+        self.assertEqual(
+            configuration["staticfiles_backend"],
             "whitenoise.storage.CompressedManifestStaticFilesStorage",
         )
         self.assertNotEqual(settings.STATIC_ROOT, settings.MEDIA_ROOT)
