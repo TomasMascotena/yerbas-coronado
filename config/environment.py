@@ -17,6 +17,14 @@ INSECURE_SECRET_MARKERS = (
     "replace-with",
 )
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+VALID_POSTGRES_SSLMODES = {
+    "disable",
+    "allow",
+    "prefer",
+    "require",
+    "verify-ca",
+    "verify-full",
+}
 HOSTNAME_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 
@@ -165,30 +173,80 @@ def parse_csrf_trusted_origins(environ, environment):
     return normalized_origins
 
 
-def _required_value(environ, name):
+POSTGRES_VARIABLES = {
+    "NAME": "POSTGRES_DB",
+    "USER": "POSTGRES_USER",
+    "PASSWORD": "POSTGRES_PASSWORD",
+    "HOST": "POSTGRES_HOST",
+    "PORT": "POSTGRES_PORT",
+}
+RAILWAY_POSTGRES_VARIABLES = {
+    "NAME": "PGDATABASE",
+    "USER": "PGUSER",
+    "PASSWORD": "PGPASSWORD",
+    "HOST": "PGHOST",
+    "PORT": "PGPORT",
+}
+
+
+def _required_database_value(environ, name):
     value = environ.get(name, "")
     if not value.strip():
         configuration_error(f"{name} es obligatoria y no puede estar vacía.")
     return value
 
 
-def build_database_configuration(environ):
-    port_value = _required_value(environ, "POSTGRES_PORT")
+def _parse_non_negative_int(environ, name, *, default):
+    raw_value = environ.get(name, str(default))
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        configuration_error(f"{name} debe ser un entero no negativo.")
+    if value < 0:
+        configuration_error(f"{name} debe ser un entero no negativo.")
+    return value
+
+
+def build_database_configuration(environ, *, environment="development"):
+    variable_names = (
+        POSTGRES_VARIABLES
+        if any(name in environ for name in POSTGRES_VARIABLES.values())
+        else RAILWAY_POSTGRES_VARIABLES
+    )
+    port_value = _required_database_value(environ, variable_names["PORT"])
     try:
         port = int(port_value)
     except ValueError:
-        configuration_error("POSTGRES_PORT debe ser un puerto válido.")
+        configuration_error(
+            f"{variable_names['PORT']} debe ser un puerto válido."
+        )
     if not 1 <= port <= 65535:
-        configuration_error("POSTGRES_PORT debe ser un puerto válido.")
+        configuration_error(
+            f"{variable_names['PORT']} debe ser un puerto válido."
+        )
 
-    return {
+    conn_max_age = _parse_non_negative_int(
+        environ,
+        "POSTGRES_CONN_MAX_AGE",
+        default=60 if environment == PRODUCTION else 0,
+    )
+    sslmode = environ.get("POSTGRES_SSLMODE", "").strip().lower()
+    if sslmode and sslmode not in VALID_POSTGRES_SSLMODES:
+        configuration_error("POSTGRES_SSLMODE contiene un valor inválido.")
+
+    configuration = {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": _required_value(environ, "POSTGRES_DB"),
-        "USER": _required_value(environ, "POSTGRES_USER"),
-        "PASSWORD": _required_value(environ, "POSTGRES_PASSWORD"),
-        "HOST": _required_value(environ, "POSTGRES_HOST"),
+        "NAME": _required_database_value(environ, variable_names["NAME"]),
+        "USER": _required_database_value(environ, variable_names["USER"]),
+        "PASSWORD": _required_database_value(environ, variable_names["PASSWORD"]),
+        "HOST": _required_database_value(environ, variable_names["HOST"]),
         "PORT": port,
+        "CONN_MAX_AGE": conn_max_age,
+        "CONN_HEALTH_CHECKS": conn_max_age > 0,
     }
+    if sslmode:
+        configuration["OPTIONS"] = {"sslmode": sslmode}
+    return configuration
 
 
 def parse_hsts_seconds(environ, environment):

@@ -39,6 +39,13 @@ CONFIGURATION_VARIABLES = {
     "POSTGRES_PASSWORD",
     "POSTGRES_HOST",
     "POSTGRES_PORT",
+    "POSTGRES_CONN_MAX_AGE",
+    "POSTGRES_SSLMODE",
+    "PGDATABASE",
+    "PGUSER",
+    "PGPASSWORD",
+    "PGHOST",
+    "PGPORT",
 }
 SAFE_PRODUCTION_SECRET = (
     "test-only-secret-K7!yQ2#vN9@xR4-pL8_cT6*mW3-zF5_hJ1+uD0=sA7%gB9"
@@ -203,6 +210,57 @@ class EnvironmentParserTests(SimpleTestCase):
 
         self.assertEqual(configuration["ENGINE"], "django.db.backends.postgresql")
         self.assertEqual(configuration["PORT"], 5432)
+
+    def test_postgresql_acepta_variables_nativas_de_railway(self):
+        configuration = build_database_configuration(
+            {
+                "PGDATABASE": "railway",
+                "PGUSER": "postgres",
+                "PGPASSWORD": "password",
+                "PGHOST": "postgres.railway.internal",
+                "PGPORT": "5432",
+                "POSTGRES_SSLMODE": "require",
+            },
+            environment="production",
+        )
+
+        self.assertEqual(configuration["NAME"], "railway")
+        self.assertEqual(configuration["HOST"], "postgres.railway.internal")
+        self.assertEqual(configuration["CONN_MAX_AGE"], 60)
+        self.assertTrue(configuration["CONN_HEALTH_CHECKS"])
+        self.assertEqual(configuration["OPTIONS"], {"sslmode": "require"})
+
+    def test_conexiones_persistentes_y_ssl_rechazan_valores_invalidos(self):
+        base_environment = {
+            "POSTGRES_DB": "database",
+            "POSTGRES_USER": "user",
+            "POSTGRES_PASSWORD": "password",
+            "POSTGRES_HOST": "localhost",
+            "POSTGRES_PORT": "5432",
+        }
+        for name, value in (
+            ("POSTGRES_CONN_MAX_AGE", "-1"),
+            ("POSTGRES_CONN_MAX_AGE", "sesenta"),
+            ("POSTGRES_SSLMODE", "inseguro"),
+        ):
+            with self.subTest(name=name, value=value):
+                with self.assertRaises(ImproperlyConfigured):
+                    build_database_configuration(
+                        {**base_environment, name: value},
+                        environment="production",
+                    )
+
+    def test_postgresql_no_mezcla_juegos_de_variables_parciales(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "POSTGRES_PORT"):
+            build_database_configuration(
+                {
+                    "POSTGRES_USER": "user",
+                    "PGDATABASE": "railway",
+                    "PGPASSWORD": "password",
+                    "PGHOST": "postgres.railway.internal",
+                    "PGPORT": "5432",
+                }
+            )
 
     def test_produccion_rechaza_logging_debug(self):
         with self.assertRaisesMessage(

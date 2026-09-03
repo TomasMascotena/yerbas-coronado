@@ -19,7 +19,11 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from config.views import liveness, readiness
+
 urlpatterns = [
+    path('health/live/', liveness, name='health-live'),
+    path('health/ready/', readiness, name='health-ready'),
     path('carrito/', include('cart.urls')),
     path('', include('orders.urls')),
     path('', include('catalog.urls')),

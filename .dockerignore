@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+.venv
+__pycache__
+*.pyc
+*.log
+.e2e-artifacts
+media
+staticfiles
+db.sqlite3
+db.sqlite3-journal
