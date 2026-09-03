@@ -43,6 +43,11 @@ proceso. Ese modo no carga `.env`, usa `DEBUG=False` y conserva PostgreSQL.
 - `POSTGRES_HOST`;
 - `POSTGRES_PORT`.
 
+Como alternativa compatible con Railway se acepta el juego completo `PGDATABASE`,
+`PGUSER`, `PGPASSWORD`, `PGHOST` y `PGPORT`. Las variables `POSTGRES_*`
+conservan precedencia para no romper desarrollo ni tests existentes. La matriz
+operativa completa está en `docs/deployment/VARIABLES_ENTORNO.md`.
+
 `DJANGO_DEBUG` es opcional y vale `false` por defecto en producción. Si se
 declara, solo admite `true` o `false`; `true` impide el arranque de producción.
 
@@ -58,6 +63,9 @@ declara, solo admite `true` o `false`; `true` impide el arranque de producción.
 - `DJANGO_TRUST_X_FORWARDED_PROTO`: `true` o `false`;
 - `WHATSAPP_BUSINESS_NUMBER`: número comercial en el formato ya validado por
   la aplicación.
+- `POSTGRES_CONN_MAX_AGE`: segundos de persistencia de conexión; producción
+  usa `60` por defecto y activa la comprobación de salud de Django;
+- `POSTGRES_SSLMODE`: modo SSL de psycopg validado contra los valores estándar.
 
 No se debe activar `DJANGO_TRUST_X_FORWARDED_PROTO` hasta conocer y controlar
 el proxy inverso. Al activarlo, Django confiará en `X-Forwarded-Proto`; el proxy
@@ -84,12 +92,15 @@ deben verificar el certificado, HTTPS y el control de todos los subdominios.
 
 - `STATIC_ROOT` apunta a `staticfiles/` y permite ejecutar
   `python manage.py collectstatic --noinput`;
+- WhiteNoise sirve estáticos comprimidos y con nombres versionados desde ese
+  directorio, pero nunca archivos subidos;
 - `MEDIA_ROOT` permanece en `media/` y está separado de los estáticos;
 - Django solo sirve media mediante las URLs de desarrollo cuando `DEBUG=True`.
 
-La persistencia, los backups y el almacenamiento local o externo de imágenes
-son decisiones pendientes de 10D. También quedan para 10D el servidor WSGI,
-el proxy, el proveedor y la estrategia operativa de estáticos/media.
+El filesystem de ejecución no es almacenamiento persistente. El lanzamiento
+comercial y las cargas de imágenes desde Admin quedan bloqueados hasta elegir
+un backend externo; consultar `docs/deployment/RAILWAY.md`. Gunicorn, Railway,
+backups, rollback, proxy y operación también están documentados allí.
 
 ## Validación de producción
 
