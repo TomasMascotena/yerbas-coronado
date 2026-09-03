@@ -67,8 +67,11 @@ class DeploymentConfigurationTests(SimpleTestCase):
         self.assertEqual(configuration["threads"], 3)
         self.assertEqual(configuration["timeout"], 75)
         self.assertEqual(configuration["graceful_timeout"], 25)
+        self.assertEqual(configuration["keepalive"], 5)
         self.assertEqual(configuration["accesslog"], "-")
         self.assertEqual(configuration["errorlog"], "-")
+        self.assertTrue(configuration["capture_output"])
+        self.assertTrue(configuration["control_socket_disable"])
 
     def test_gunicorn_rechaza_concurrencia_invalida(self):
         with patch.dict(os.environ, {"GUNICORN_WORKERS": "0"}, clear=False):
