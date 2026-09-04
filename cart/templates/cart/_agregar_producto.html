@@ -1,8 +1,9 @@
 {% if producto.inventario.cantidad_disponible > 0 %}
     <form class="add-cart-form" action="{% url 'cart:agregar_producto' producto.pk %}" method="post">
         {% csrf_token %}
+        {% if retorno %}<input type="hidden" name="next" value="{{ retorno }}">{% endif %}
         <button class="button button--primary" type="submit" aria-label="Agregar {{ producto.nombre }}, presentación {{ producto.peso }} al Carrito">
-            Agregar al Carrito
+            Agregar al carrito
         </button>
     </form>
 {% endif %}

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: yerbas_ci
+          POSTGRES_USER: yerbas_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yerbas_ci -d yerbas_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DJANGO_ENV: test
+      DJANGO_SECRET_KEY: ci-only-secret-not-valid-for-production
+      POSTGRES_DB: yerbas_ci
+      POSTGRES_USER: yerbas_ci
+      POSTGRES_PASSWORD: ci-only-password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip_audit -r requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test
+      - run: python manage.py test e2e.infrastructure
+      - run: python manage.py test e2e.public_purchase e2e.admin_workflows
+      - run: python manage.py collectstatic --noinput
+      - run: gunicorn --check-config config.wsgi:application --config gunicorn.conf.py
+      - run: docker build --tag yerbas-coronado-ci .
+      - name: Check simulated production configuration
+        env:
+          DJANGO_ENV: production
+          DJANGO_SECRET_KEY: ci-only-production-secret-K7-yQ2-vN9-xR4-pL8-cT6-mW3-zF5-hJ1-uD0-sA7-gB9
+          DJANGO_ALLOWED_HOSTS: shop.example.test
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://shop.example.test
+          DJANGO_SECURE_HSTS_SECONDS: "31536000"
+          DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS: "true"
+          DJANGO_SECURE_HSTS_PRELOAD: "true"
+          DJANGO_TRUST_X_FORWARDED_PROTO: "true"
+          POSTGRES_SSLMODE: require
+        run: python manage.py check --deploy
+      - run: git diff --check
+      - name: Reject tracked local artifacts
+        run: test -z "$(git ls-files '*.sqlite*' 'media/**' '.env' '.e2e-artifacts/**')"

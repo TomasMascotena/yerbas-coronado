@@ -74,7 +74,7 @@ class CheckoutPublicoTests(TestCase):
         self.assertContains(respuesta, "Dirección de envío")
         self.assertContains(respuesta, "orders/checkout.js")
         self.assertNotIn(str(carrito.token_checkout), respuesta.request["PATH_INFO"])
-        self.assertEqual(respuesta["Referrer-Policy"], "no-referrer")
+        self.assertEqual(respuesta["Referrer-Policy"], "same-origin")
         self.assertIn("no-store", respuesta["Cache-Control"])
 
     def test_carrito_no_vacio_ofrece_checkout_y_vacio_no_lo_ofrece(self):

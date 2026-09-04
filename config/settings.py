@@ -11,25 +11,42 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
-from pathlib import Path
+
+from config.environment import (
+    PRODUCTION,
+    build_database_configuration,
+    parse_allowed_hosts,
+    parse_bool,
+    parse_csrf_trusted_origins,
+    parse_debug,
+    parse_environment,
+    parse_hsts_seconds,
+    parse_log_level,
+    parse_secret_key,
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+ENVIRONMENT = parse_environment(os.environ)
+IS_PRODUCTION = ENVIRONMENT == PRODUCTION
+if ENVIRONMENT == "development":
+    load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+SECRET_KEY = parse_secret_key(os.environ, ENVIRONMENT)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = parse_debug(os.environ, ENVIRONMENT)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = parse_allowed_hosts(os.environ, ENVIRONMENT)
+CSRF_TRUSTED_ORIGINS = parse_csrf_trusted_origins(os.environ, ENVIRONMENT)
 
 
 # Application definition
@@ -49,6 +66,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+]
+if IS_PRODUCTION:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,6 +91,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'cart.context_processors.indicador_carrito',
+                'catalog.context_processors.contacto_publico',
             ],
         },
     },
@@ -82,14 +104,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB"),
-        "USER": os.getenv("POSTGRES_USER"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
-        "HOST": os.getenv("POSTGRES_HOST"),
-        "PORT": os.getenv("POSTGRES_PORT"),
-    }
+    "default": build_database_configuration(
+        os.environ,
+        environment=ENVIRONMENT,
+    )
 }
 
 
@@ -128,11 +146,85 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if ENVIRONMENT == PRODUCTION
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 WHATSAPP_BUSINESS_NUMBER = os.getenv("WHATSAPP_BUSINESS_NUMBER", "")
+
+# Security settings are deliberately strict only in production so local HTTP
+# development remains straightforward.
+SECURE_SSL_REDIRECT = IS_PRODUCTION
+SECURE_REDIRECT_EXEMPT = [r"^health/live/$", r"^health/ready/$"]
+SESSION_COOKIE_SECURE = IS_PRODUCTION
+CSRF_COOKIE_SECURE = IS_PRODUCTION
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+X_FRAME_OPTIONS = "DENY"
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
+
+SECURE_HSTS_SECONDS = parse_hsts_seconds(os.environ, ENVIRONMENT)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = parse_bool(
+    os.environ,
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    default=False,
+)
+SECURE_HSTS_PRELOAD = parse_bool(
+    os.environ,
+    "DJANGO_SECURE_HSTS_PRELOAD",
+    default=False,
+)
+
+if parse_bool(os.environ, "DJANGO_TRUST_X_FORWARDED_PROTO", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+LOG_LEVEL = parse_log_level(os.environ, ENVIRONMENT)
+if IS_PRODUCTION:
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "{levelname} {name}: {message}",
+                "style": "{",
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "standard",
+            },
+        },
+        "root": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+        },
+        "loggers": {
+            "django.security": {
+                "handlers": ["console"],
+                "level": "WARNING",
+                "propagate": False,
+            },
+        },
+    }
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

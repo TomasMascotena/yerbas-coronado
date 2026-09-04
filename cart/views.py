@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST, require_safe
 
 from cart.context_processors import obtener_resumen_para_request
@@ -88,6 +89,17 @@ def _session_key_existente(request):
     return request.session.session_key
 
 
+def _destino_despues_de_post(request):
+    destino = request.POST.get("next")
+    if destino and url_has_allowed_host_and_scheme(
+        destino,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return destino
+    return "cart:detalle"
+
+
 @require_safe
 def detalle(request):
     resumen = obtener_resumen_para_request(request)
@@ -126,7 +138,7 @@ def agregar_producto(request, producto_id):
         raise RuntimeError("No fue posible procesar el Carrito.") from error
     else:
         messages.success(request, "Producto agregado al Carrito.")
-    return redirect("cart:detalle")
+    return redirect(_destino_despues_de_post(request))
 
 
 @require_POST
@@ -134,7 +146,7 @@ def establecer_cantidad(request, item_id):
     session_key = _session_key_existente(request)
     if session_key is None:
         messages.error(request, "El artículo no está disponible en tu Carrito.")
-        return redirect("cart:detalle")
+        return redirect(_destino_despues_de_post(request))
 
     formulario = EstablecerCantidadItemForm(request.POST)
     if not formulario.is_valid():
@@ -142,7 +154,7 @@ def establecer_cantidad(request, item_id):
             request,
             "Ingresá una cantidad entera mayor que cero.",
         )
-        return redirect("cart:detalle")
+        return redirect(_destino_despues_de_post(request))
 
     try:
         establecer_cantidad_item(
@@ -165,7 +177,7 @@ def establecer_cantidad(request, item_id):
         raise RuntimeError("No fue posible procesar el Carrito.") from error
     else:
         messages.success(request, "Cantidad del Carrito verificada.")
-    return redirect("cart:detalle")
+    return redirect(_destino_despues_de_post(request))
 
 
 @require_POST
@@ -173,7 +185,7 @@ def eliminar_item(request, item_id):
     session_key = _session_key_existente(request)
     if session_key is None:
         messages.error(request, "El artículo no está disponible en tu Carrito.")
-        return redirect("cart:detalle")
+        return redirect(_destino_despues_de_post(request))
 
     try:
         eliminar_item_servicio(session_key=session_key, item_id=item_id)
@@ -183,7 +195,7 @@ def eliminar_item(request, item_id):
         raise RuntimeError("No fue posible procesar el Carrito.") from error
     else:
         messages.success(request, "Producto eliminado del Carrito.")
-    return redirect("cart:detalle")
+    return redirect(_destino_despues_de_post(request))
 
 
 @require_POST
@@ -191,11 +203,11 @@ def vaciar(request):
     session_key = _session_key_existente(request)
     if session_key is None:
         messages.info(request, "El Carrito ya está vacío.")
-        return redirect("cart:detalle")
+        return redirect(_destino_despues_de_post(request))
 
     try:
         vaciar_carrito(session_key)
     except SesionNoDisponible as error:
         raise RuntimeError("No fue posible procesar el Carrito.") from error
     messages.info(request, "El Carrito quedó vacío.")
-    return redirect("cart:detalle")
+    return redirect(_destino_despues_de_post(request))
