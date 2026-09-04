@@ -12,19 +12,28 @@
     <a class="skip-link" href="#contenido">Ir al contenido principal</a>
     <header class="site-header">
         <div class="site-header__inner">
-            <a class="brand" href="{% url 'catalog:producto_list' %}">Yerbas Coronado</a>
-            <nav aria-label="Navegación principal">
-                <a href="{% url 'catalog:producto_list' %}">Productos</a>
-                {% with cantidad=cart_resumen_global.cantidad_total_unidades %}
-                    <a class="cart-link" href="{% url 'cart:detalle' %}" aria-label="Carrito, {{ cantidad }} {% if cantidad == 1 %}unidad{% else %}unidades{% endif %}">
-                        Carrito
-                        <span class="cart-count" aria-hidden="true">{{ cantidad }}</span>
-                    </a>
-                {% endwith %}
-            </nav>
+            <a class="brand" href="{% url 'catalog:producto_list' %}" aria-label="Yerbas Coronado, inicio">
+                <span class="brand__mark" aria-hidden="true">YC</span>
+                <span class="brand__name">Yerbas Coronado</span>
+            </a>
+            <div class="site-header__actions">
+                <form class="site-search" action="{% url 'catalog:producto_list' %}" method="get" role="search">
+                    <label class="visually-hidden" for="site-search">Buscar productos</label>
+                    <input id="site-search" name="q" type="search" value="{{ busqueda|default:'' }}" placeholder="Buscar productos">
+                    <button type="submit" aria-label="Buscar productos"><span aria-hidden="true">⌕</span></button>
+                </form>
+                <nav aria-label="Carrito">
+                    {% with cantidad=cart_resumen_global.cantidad_total_unidades %}
+                        <a class="cart-link" href="{% url 'cart:detalle' %}" aria-label="Carrito, {{ cantidad }} {% if cantidad == 1 %}unidad{% else %}unidades{% endif %}">
+                            <span class="cart-link__label">Carrito</span>
+                            <span class="cart-count" aria-hidden="true">{{ cantidad }}</span>
+                        </a>
+                    {% endwith %}
+                </nav>
+            </div>
         </div>
     </header>
-    <main id="contenido" class="page-shell">
+    <main id="contenido" class="{% block main_class %}page-shell{% endblock %}">
         {% if messages %}
             <section class="messages" aria-label="Mensajes del sitio">
                 {% for message in messages %}
@@ -35,7 +44,20 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="site-footer">
-        <p>Yerbas Coronado · Yerba mate para compartir</p>
+        <div class="site-footer__inner">
+            <div class="footer-brand">
+                <span class="footer-brand__mark" aria-hidden="true">YC</span>
+                <div><p class="footer-brand__name">Yerbas Coronado</p><p>Yerba mate para compartir</p></div>
+            </div>
+            <div class="footer-contact">
+                <p class="footer-heading">Encontranos</p>
+                <div class="footer-socials" aria-label="Canales de contacto">
+                    <span>Instagram</span><span>TikTok</span>
+                    {% if whatsapp_mayorista_url %}<a href="{{ whatsapp_mayorista_url }}" rel="noreferrer" referrerpolicy="no-referrer">WhatsApp</a>{% else %}<span>WhatsApp</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        <p class="site-footer__copyright">© {% now "Y" %} Yerbas Coronado</p>
     </footer>
     {% block extra_js %}{% endblock %}
 </body>

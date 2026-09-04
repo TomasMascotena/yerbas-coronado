@@ -2,41 +2,75 @@
 {% load static %}
 
 {% block extra_css %}<link rel="stylesheet" href="{% static 'cart/cart.css' %}">{% endblock %}
-
-{% block title %}Productos · Yerbas Coronado{% endblock %}
+{% block title %}Yerbas Coronado · Yerbas para cada mate{% endblock %}
+{% block main_class %}home-shell{% endblock %}
 
 {% block content %}
-<section class="page-heading">
-    <p class="eyebrow">Catálogo</p>
-    <h1>Nuestras yerbas</h1>
-    <p>Encontrá la presentación que mejor acompaña tu mate.</p>
+<section class="home-hero" aria-labelledby="hero-title">
+    <img class="home-hero__image" src="{% static 'catalog/images/hero.png' %}" alt="Selección de paquetes de yerba mate sobre una mesa de madera">
+    <div class="home-hero__content">
+        <p class="eyebrow">Yerbas para cada mate</p>
+        <h1 id="hero-title">El mate que buscás, en un solo lugar</h1>
+        <p>Descubrí nuestra selección de yerbas y elegí la que mejor va con vos.</p>
+    </div>
 </section>
 
-{% if productos %}
-    <section class="product-grid" aria-label="Catálogo de productos">
-        {% for producto in productos %}
-            <article class="product-card">
-                <a class="product-card__image" href="{% url 'catalog:producto_detail' producto.pk %}">
-                    <img src="{{ producto.imagen.url }}" alt="Producto {{ producto.nombre }}, presentación {{ producto.peso }}" loading="lazy">
-                </a>
-                <div class="product-card__content">
-                    <div>
-                        <p class="product-weight">{{ producto.peso }}</p>
-                        <h2><a href="{% url 'catalog:producto_detail' producto.pk %}">{{ producto.nombre }}</a></h2>
-                    </div>
-                    {% include "catalog/_precios.html" %}
-                    {% if producto.inventario.cantidad_disponible > 0 %}
-                        <p class="availability availability--available">Disponible</p>
-                    {% else %}
-                        <p class="availability availability--unavailable">Sin Stock</p>
-                    {% endif %}
-                    {% include "cart/_agregar_producto.html" %}
-                    <a class="detail-link" href="{% url 'catalog:producto_detail' producto.pk %}" aria-label="Ver {{ producto.nombre }}, presentación {{ producto.peso }}">Ver producto</a>
-                </div>
-            </article>
-        {% endfor %}
-    </section>
-{% else %}
-    <p class="empty-state">No hay Productos publicados en este momento.</p>
-{% endif %}
+<section class="benefits" aria-labelledby="benefits-title">
+    <h2 id="benefits-title" class="visually-hidden">Ventajas de comprar en Yerbas Coronado</h2>
+    <article class="benefit"><span class="benefit__icon" aria-hidden="true">✦</span><h3>Variedad de yerbas</h3><p>Encontrá distintas marcas, estilos y presentaciones.</p></article>
+    <article class="benefit"><span class="benefit__icon" aria-hidden="true">✓</span><h3>Stock actualizado</h3><p>Consultá la disponibilidad real de cada producto.</p></article>
+    <article class="benefit"><span class="benefit__icon" aria-hidden="true">$</span><h3>Precios por cantidad</h3><p>Accedé a mejores precios según el volumen de tu compra.</p></article>
+    <article class="benefit"><span class="benefit__icon" aria-hidden="true">→</span><h3>Retiro o envío</h3><p>Elegí la modalidad que mejor se adapte a tu compra.</p></article>
+    <article class="benefit"><span class="benefit__icon" aria-hidden="true">+</span><h3>Compra simple</h3><p>Armá tu pedido online de forma rápida y sencilla.</p></article>
+</section>
+
+<section id="productos" class="catalog-section" aria-labelledby="catalog-title">
+    <header class="section-heading"><p class="eyebrow">Elegí tu favorita</p><h2 id="catalog-title">Nuestros productos</h2><p>Combiná distintas yerbas en tu compra y accedé a mejores precios según la cantidad total.</p></header>
+    {% if busqueda %}<div class="search-summary" role="status"><p>Resultados para “{{ busqueda }}”</p><a href="{% url 'catalog:producto_list' %}#productos">Ver todos los productos</a></div>{% endif %}
+    {% if productos %}
+        <div class="product-grid" aria-label="Catálogo de productos">
+            {% for tarjeta in tarjetas %}
+                {% with producto=tarjeta.producto linea=tarjeta.linea_carrito %}
+                    <article class="product-card">
+                        <a class="product-card__image" href="{% url 'catalog:producto_detail' producto.pk %}"><img src="{{ producto.imagen.url }}" alt="Producto {{ producto.nombre }}, presentación {{ producto.peso }}" loading="lazy"></a>
+                        <div class="product-card__content">
+                            <div class="product-card__heading"><h3><a href="{% url 'catalog:producto_detail' producto.pk %}">{{ producto.nombre }}</a></h3><p class="product-weight">{{ producto.peso }}</p></div>
+                            {% include "catalog/_precios.html" %}
+                            {% if producto.inventario.cantidad_disponible > 0 %}<p class="availability availability--available">Disponible</p>{% else %}<p class="availability availability--unavailable">Sin Stock</p>{% endif %}
+                            {% if linea %}
+                                <div class="quantity-stepper" role="group" aria-label="Cantidad de {{ producto.nombre }}, presentación {{ producto.peso }} en el Carrito">
+                                    {% if linea.cantidad == 1 %}
+                                        <form action="{% url 'cart:eliminar_item' linea.item_id %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ retorno_catalogo }}"><button type="submit" aria-label="Quitar {{ producto.nombre }} del Carrito">−</button></form>
+                                    {% else %}
+                                        <form action="{% url 'cart:establecer_cantidad' linea.item_id %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ retorno_catalogo }}"><input type="hidden" name="cantidad" value="{{ linea.cantidad|add:'-1' }}"><button type="submit" aria-label="Restar una unidad de {{ producto.nombre }}">−</button></form>
+                                    {% endif %}
+                                    <output aria-label="Cantidad actual">{{ linea.cantidad }}</output>
+                                    {% if producto.inventario.cantidad_disponible > linea.cantidad %}
+                                        <form action="{% url 'cart:agregar_producto' producto.pk %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ retorno_catalogo }}"><button type="submit" aria-label="Sumar una unidad de {{ producto.nombre }}">+</button></form>
+                                    {% else %}
+                                        <button type="button" disabled aria-label="No hay más unidades disponibles de {{ producto.nombre }}">+</button>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                {% include "cart/_agregar_producto.html" with retorno=retorno_catalogo %}
+                            {% endif %}
+                            {% if producto.descripcion %}<div class="product-card__description"><p>{{ producto.descripcion }}</p></div>{% endif %}
+                            <a class="detail-link" href="{% url 'catalog:producto_detail' producto.pk %}" aria-label="Ver {{ producto.nombre }}, presentación {{ producto.peso }}">Ver producto</a>
+                        </div>
+                    </article>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">{% if busqueda %}<p>No encontramos productos para esa búsqueda.</p>{% else %}<p>No hay Productos publicados en este momento.</p>{% endif %}</div>
+    {% endif %}
+</section>
+
+<section class="wholesale" aria-labelledby="wholesale-title">
+    <img class="wholesale__image" src="{% static 'catalog/images/ventas_mayoristas.png' %}" alt="Selección de yerbas para ventas mayoristas">
+    <div class="wholesale__content">
+        <p class="eyebrow">Ventas mayoristas</p><h2 id="wholesale-title">¿Comprás para tu negocio?</h2><p>Tenemos opciones mayoristas para comercios, revendedores y compras en cantidad.</p>
+        {% if whatsapp_mayorista_url %}<a class="button button--light" href="{{ whatsapp_mayorista_url }}" rel="noreferrer" referrerpolicy="no-referrer">Consultar por mayor</a>{% else %}<p class="wholesale__unavailable" role="status">Las consultas mayoristas por WhatsApp no están disponibles temporalmente.</p>{% endif %}
+    </div>
+</section>
 {% endblock %}
