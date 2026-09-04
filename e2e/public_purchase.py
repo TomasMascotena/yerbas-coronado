@@ -13,11 +13,14 @@ from e2e.base import BrowserE2ETestCase, VIEWPORT_ESCRITORIO, VIEWPORT_MOVIL
 
 class CompraPublicaE2ETests(BrowserE2ETestCase):
     def agregar_producto(self, producto):
-        self.page.goto(self.url(reverse("catalog:producto_list")))
+        catalogo = self.url(reverse("catalog:producto_list"))
+        self.page.goto(catalogo)
         self.page.get_by_role(
             "button",
             name=f"Agregar {producto.nombre}, presentación {producto.peso} al Carrito",
         ).click()
+        expect(self.page).to_have_url(f"{catalogo}#productos")
+        self.page.locator("a.cart-link").click()
         expect(self.page).to_have_url(self.url(reverse("cart:detalle")))
 
     def abrir_checkout(self):
