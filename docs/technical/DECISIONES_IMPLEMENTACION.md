@@ -232,3 +232,20 @@ confirmación permanecen disponibles, pero no se muestra el enlace de WhatsApp.
 La interfaz puede utilizar JavaScript como mejora progresiva para mostrar u
 ocultar los campos de Dirección de Envío. El formulario completo permanece
 utilizable sin JavaScript y toda validación definitiva continúa en el servidor.
+
+## DI-017 — Configuración de producción y archivos públicos
+
+**Estado:** Aprobada
+
+La configuración de producción se obtiene exclusivamente de variables de
+entorno. El servicio web se ejecuta mediante Gunicorn detrás del proxy HTTPS de
+la plataforma y WhiteNoise sirve los archivos estáticos recolectados.
+
+Las imágenes de Producto continúan siendo archivos públicos administrados por
+Django. En Railway, `MEDIA_ROOT` utiliza el volumen persistente montado en el
+servicio web; sin ese volumen no se considera válido el despliegue porque las
+imágenes podrían perderse al reiniciar o reemplazar el contenedor.
+
+La decisión no vincula el dominio con Railway: un cambio de proveedor solo
+requiere reemplazar la configuración externa, PostgreSQL y el almacenamiento
+persistente de medios.

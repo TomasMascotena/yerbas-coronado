@@ -10,6 +10,11 @@ venv/
 # Environment variables / secrets
 .env
 .env.*
+!.env.example
+
+# Django generated files
+staticfiles/
+media/
 
 # Django
 *.log
