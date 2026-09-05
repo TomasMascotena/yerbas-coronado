@@ -1,5 +1,7 @@
 asgiref==3.12.1
+boto3==1.43.89
 Django==5.2.17
+django-storages==1.14.6
 gunicorn==26.2.0
 Pillow==12.3.0
 psycopg==3.3.4

@@ -27,7 +27,8 @@ class DeploymentConfigurationTests(SimpleTestCase):
                     "print(json.dumps({"
                     "'middleware': settings.MIDDLEWARE, "
                     "'staticfiles_backend': "
-                    "settings.STORAGES['staticfiles']['BACKEND']"
+                    "settings.STORAGES['staticfiles']['BACKEND'], "
+                    "'media_backend': settings.STORAGES['default']['BACKEND']"
                     "}))"
                 ),
             ],
@@ -94,6 +95,10 @@ class DeploymentConfigurationTests(SimpleTestCase):
                     configuration["staticfiles_backend"],
                     "django.contrib.staticfiles.storage.StaticFilesStorage",
                 )
+                self.assertEqual(
+                    configuration["media_backend"],
+                    "django.core.files.storage.FileSystemStorage",
+                )
                 self.assertNotIn("No directory at", stderr)
 
     def test_whitenoise_sirve_estaticos_versionados_en_produccion(self):
@@ -109,5 +114,9 @@ class DeploymentConfigurationTests(SimpleTestCase):
         self.assertEqual(
             configuration["staticfiles_backend"],
             "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        )
+        self.assertEqual(
+            configuration["media_backend"],
+            "storages.backends.s3.S3Storage",
         )
         self.assertNotEqual(settings.STATIC_ROOT, settings.MEDIA_ROOT)

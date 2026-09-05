@@ -25,6 +25,13 @@ VALID_POSTGRES_SSLMODES = {
     "verify-ca",
     "verify-full",
 }
+S3_MEDIA_VARIABLES = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_STORAGE_BUCKET_NAME",
+    "AWS_S3_ENDPOINT_URL",
+    "AWS_S3_REGION_NAME",
+)
 HOSTNAME_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 
@@ -189,7 +196,7 @@ RAILWAY_POSTGRES_VARIABLES = {
 }
 
 
-def _required_database_value(environ, name):
+def _required_environment_value(environ, name):
     value = environ.get(name, "")
     if not value.strip():
         configuration_error(f"{name} es obligatoria y no puede estar vacía.")
@@ -213,7 +220,7 @@ def build_database_configuration(environ, *, environment="development"):
         if any(name in environ for name in POSTGRES_VARIABLES.values())
         else RAILWAY_POSTGRES_VARIABLES
     )
-    port_value = _required_database_value(environ, variable_names["PORT"])
+    port_value = _required_environment_value(environ, variable_names["PORT"])
     try:
         port = int(port_value)
     except ValueError:
@@ -236,10 +243,13 @@ def build_database_configuration(environ, *, environment="development"):
 
     configuration = {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": _required_database_value(environ, variable_names["NAME"]),
-        "USER": _required_database_value(environ, variable_names["USER"]),
-        "PASSWORD": _required_database_value(environ, variable_names["PASSWORD"]),
-        "HOST": _required_database_value(environ, variable_names["HOST"]),
+        "NAME": _required_environment_value(environ, variable_names["NAME"]),
+        "USER": _required_environment_value(environ, variable_names["USER"]),
+        "PASSWORD": _required_environment_value(
+            environ,
+            variable_names["PASSWORD"],
+        ),
+        "HOST": _required_environment_value(environ, variable_names["HOST"]),
         "PORT": port,
         "CONN_MAX_AGE": conn_max_age,
         "CONN_HEALTH_CHECKS": conn_max_age > 0,
@@ -270,3 +280,43 @@ def parse_log_level(environ, environment):
     if environment == PRODUCTION and level == "DEBUG":
         configuration_error("DJANGO_LOG_LEVEL no puede ser DEBUG en producción.")
     return level
+
+
+def build_media_storage_configuration(environ, *, environment="development"):
+    if environment != PRODUCTION:
+        return {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        }
+
+    values = {
+        name: _required_environment_value(environ, name)
+        for name in S3_MEDIA_VARIABLES
+    }
+    endpoint = values["AWS_S3_ENDPOINT_URL"].rstrip("/")
+    parsed_endpoint = urlsplit(endpoint)
+    if (
+        parsed_endpoint.scheme != "https"
+        or not parsed_endpoint.hostname
+        or parsed_endpoint.username is not None
+        or parsed_endpoint.password is not None
+        or parsed_endpoint.path
+        or parsed_endpoint.query
+        or parsed_endpoint.fragment
+    ):
+        configuration_error("AWS_S3_ENDPOINT_URL debe ser un origen HTTPS válido.")
+
+    return {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": values["AWS_ACCESS_KEY_ID"],
+            "secret_key": values["AWS_SECRET_ACCESS_KEY"],
+            "bucket_name": values["AWS_STORAGE_BUCKET_NAME"],
+            "endpoint_url": endpoint,
+            "region_name": values["AWS_S3_REGION_NAME"],
+            "addressing_style": "virtual",
+            "default_acl": None,
+            "file_overwrite": False,
+            "querystring_auth": True,
+            "querystring_expire": 3600,
+        },
+    }
