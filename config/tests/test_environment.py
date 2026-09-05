@@ -11,6 +11,7 @@ from django.test import SimpleTestCase
 from config.environment import (
     DEFAULT_DEVELOPMENT_HOSTS,
     build_database_configuration,
+    build_media_storage_configuration,
     parse_allowed_hosts,
     parse_bool,
     parse_csrf_trusted_origins,
@@ -46,6 +47,11 @@ CONFIGURATION_VARIABLES = {
     "PGPASSWORD",
     "PGHOST",
     "PGPORT",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_STORAGE_BUCKET_NAME",
+    "AWS_S3_ENDPOINT_URL",
+    "AWS_S3_REGION_NAME",
 }
 SAFE_PRODUCTION_SECRET = (
     "test-only-secret-K7!yQ2#vN9@xR4-pL8_cT6*mW3-zF5_hJ1+uD0=sA7%gB9"
@@ -69,6 +75,11 @@ def production_environment(**overrides):
             "POSTGRES_PASSWORD": "not-a-real-password",
             "POSTGRES_HOST": "database.example.test",
             "POSTGRES_PORT": "5432",
+            "AWS_ACCESS_KEY_ID": "test-access-key",
+            "AWS_SECRET_ACCESS_KEY": "test-secret-key",
+            "AWS_STORAGE_BUCKET_NAME": "test-bucket",
+            "AWS_S3_ENDPOINT_URL": "https://storage.example.test",
+            "AWS_S3_REGION_NAME": "auto",
         }
     )
     environment.update(overrides)
@@ -269,6 +280,72 @@ class EnvironmentParserTests(SimpleTestCase):
         ):
             parse_log_level({"DJANGO_LOG_LEVEL": "DEBUG"}, "production")
 
+    def test_media_usa_filesystem_fuera_de_produccion(self):
+        configuration = build_media_storage_configuration(
+            {},
+            environment="development",
+        )
+
+        self.assertEqual(
+            configuration["BACKEND"],
+            "django.core.files.storage.FileSystemStorage",
+        )
+
+    def test_media_de_produccion_exige_y_configura_s3_privado(self):
+        environment = {
+            "AWS_ACCESS_KEY_ID": "access-key",
+            "AWS_SECRET_ACCESS_KEY": "secret-key",
+            "AWS_STORAGE_BUCKET_NAME": "yerbas-media",
+            "AWS_S3_ENDPOINT_URL": "https://storage.railway.app/",
+            "AWS_S3_REGION_NAME": "auto",
+        }
+
+        configuration = build_media_storage_configuration(
+            environment,
+            environment="production",
+        )
+
+        self.assertEqual(configuration["BACKEND"], "storages.backends.s3.S3Storage")
+        options = configuration["OPTIONS"]
+        self.assertEqual(options["bucket_name"], "yerbas-media")
+        self.assertEqual(options["endpoint_url"], "https://storage.railway.app")
+        self.assertEqual(options["addressing_style"], "virtual")
+        self.assertTrue(options["querystring_auth"])
+        self.assertFalse(options["file_overwrite"])
+
+    def test_media_de_produccion_rechaza_faltantes_y_endpoint_inseguro(self):
+        complete_environment = {
+            "AWS_ACCESS_KEY_ID": "access-key",
+            "AWS_SECRET_ACCESS_KEY": "secret-key",
+            "AWS_STORAGE_BUCKET_NAME": "yerbas-media",
+            "AWS_S3_ENDPOINT_URL": "https://storage.railway.app",
+            "AWS_S3_REGION_NAME": "auto",
+        }
+        for missing_name in complete_environment:
+            with self.subTest(missing_name=missing_name):
+                environment = {
+                    name: value
+                    for name, value in complete_environment.items()
+                    if name != missing_name
+                }
+                with self.assertRaisesMessage(ImproperlyConfigured, missing_name):
+                    build_media_storage_configuration(
+                        environment,
+                        environment="production",
+                    )
+
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "AWS_S3_ENDPOINT_URL debe ser un origen HTTPS válido.",
+        ):
+            build_media_storage_configuration(
+                {
+                    **complete_environment,
+                    "AWS_S3_ENDPOINT_URL": "http://storage.example.test/path",
+                },
+                environment="production",
+            )
+
 
 class SettingsIntegrationTests(SimpleTestCase):
     def run_python(self, code, *, environment=None):
@@ -328,6 +405,30 @@ print(json.dumps({
         self.assertFalse(configuration["hsts_subdomains"])
         self.assertFalse(configuration["hsts_preload"])
         self.assertNotEqual(configuration["log_level"], "DEBUG")
+
+    def test_produccion_genera_url_firmada_del_bucket_sin_exponer_secreto(self):
+        result = self.run_python(
+            """
+import json
+from django.core.files.storage import default_storage
+url = default_storage.url("productos/prueba.jpg")
+print(json.dumps({
+    "url": url,
+    "contains_secret": "test-secret-key" in url,
+}))
+""",
+            environment=production_environment(),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertTrue(
+            output["url"].startswith(
+                "https://test-bucket.storage.example.test/productos/prueba.jpg?"
+            )
+        )
+        self.assertIn("X-Amz-Signature=", output["url"])
+        self.assertFalse(output["contains_secret"])
 
     def test_desarrollo_no_activa_https_ni_hsts_accidentalmente(self):
         self.assertFalse(settings.SECURE_SSL_REDIRECT)

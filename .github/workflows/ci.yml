@@ -60,6 +60,11 @@ jobs:
           DJANGO_SECURE_HSTS_PRELOAD: "true"
           DJANGO_TRUST_X_FORWARDED_PROTO: "true"
           POSTGRES_SSLMODE: require
+          AWS_ACCESS_KEY_ID: ci-access-key
+          AWS_SECRET_ACCESS_KEY: ci-secret-key
+          AWS_STORAGE_BUCKET_NAME: ci-bucket
+          AWS_S3_ENDPOINT_URL: https://storage.example.test
+          AWS_S3_REGION_NAME: auto
         run: python manage.py check --deploy
       - run: git diff --check
       - name: Reject tracked local artifacts

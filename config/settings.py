@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from config.environment import (
     PRODUCTION,
     build_database_configuration,
+    build_media_storage_configuration,
     parse_allowed_hosts,
     parse_bool,
     parse_csrf_trusted_origins,
@@ -58,6 +59,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'storages',
     'catalog',
     'inventory',
     'cart',
@@ -149,9 +151,10 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "default": build_media_storage_configuration(
+        os.environ,
+        environment=ENVIRONMENT,
+    ),
     "staticfiles": {
         "BACKEND": (
             "whitenoise.storage.CompressedManifestStaticFilesStorage"
