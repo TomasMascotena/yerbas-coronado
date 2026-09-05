@@ -193,7 +193,11 @@ class CompraPublicaE2ETests(BrowserE2ETestCase):
             pagina_sin_js.get_by_label("Localidad").fill("Posadas")
             pagina_sin_js.get_by_label("Provincia").fill("Misiones")
             pagina_sin_js.get_by_label("Referencias").fill("Portón verde")
-            pagina_sin_js.get_by_role("button", name="Confirmar Pedido").click()
+            boton_confirmar = pagina_sin_js.get_by_role(
+                "button", name="Confirmar Pedido"
+            )
+            boton_confirmar.focus()
+            boton_confirmar.press("Enter")
             expect(
                 pagina_sin_js.get_by_role(
                     "heading", name="¡Gracias por tu compra!"
