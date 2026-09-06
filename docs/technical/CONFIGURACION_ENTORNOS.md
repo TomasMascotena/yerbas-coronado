@@ -71,6 +71,11 @@ No se debe activar `DJANGO_TRUST_X_FORWARDED_PROTO` hasta conocer y controlar
 el proxy inverso. Al activarlo, Django confiará en `X-Forwarded-Proto`; el proxy
 debe eliminar cualquier valor enviado por el cliente y establecer el suyo.
 
+Configurar `WHATSAPP_BUSINESS_NUMBER` en el `.env` local no modifica el entorno
+de producción. Antes del despliegue, la administradora u operadora debe cargar
+por separado el mismo número comercial aprobado en las variables de la
+plataforma y redesplegar la aplicación.
+
 ## Protecciones de producción
 
 Producción activa redirección HTTPS, cookies de sesión y CSRF seguras,

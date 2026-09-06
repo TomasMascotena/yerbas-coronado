@@ -17,9 +17,13 @@ class CompraPublicaE2ETests(BrowserE2ETestCase):
         self.page.goto(catalogo)
         self.page.get_by_role(
             "button",
-            name=f"Agregar {producto.nombre}, presentación {producto.peso} al Carrito",
+            name=(
+                f"Agregar {producto.nombre}, presentación "
+                f"{producto.peso} al carrito"
+            ),
         ).click()
-        expect(self.page).to_have_url(f"{catalogo}#productos")
+        expect(self.page).to_have_url(catalogo)
+        expect(self.page.locator(".cart-count")).to_have_text("1")
         self.page.locator("a.cart-link").click()
         expect(self.page).to_have_url(self.url(reverse("cart:detalle")))
 
@@ -62,7 +66,7 @@ class CompraPublicaE2ETests(BrowserE2ETestCase):
         self.assert_un_h1()
         expect(
             self.page.get_by_alt_text(
-                f"Producto {producto.nombre}, presentación {producto.peso}"
+                f"{producto.nombre}, {producto.peso}"
             )
         ).to_be_visible()
         self.assert_sin_overflow_horizontal()
@@ -162,6 +166,26 @@ class CompraPublicaE2ETests(BrowserE2ETestCase):
         self.page.set_viewport_size(VIEWPORT_ESCRITORIO)
         self.assert_sin_errores_consola()
 
+    def test_agregar_sin_javascript_redirige_a_productos(self):
+        producto = crear_producto_con_stock(nombre="Sin JS E2E", stock=2)
+        catalogo = self.url(reverse("catalog:producto_list"))
+        contexto_sin_js = self.nuevo_contexto(java_script_enabled=False)
+        try:
+            pagina_sin_js = contexto_sin_js.new_page()
+            pagina_sin_js.goto(catalogo)
+            pagina_sin_js.get_by_role(
+                "button",
+                name=(
+                    f"Agregar {producto.nombre}, presentación "
+                    f"{producto.peso} al carrito"
+                ),
+            ).click()
+
+            expect(pagina_sin_js).to_have_url(f"{catalogo}#productos")
+            expect(pagina_sin_js.locator(".cart-count")).to_have_text("1")
+        finally:
+            contexto_sin_js.close()
+
     def test_compra_con_envio_muestra_direccion_y_mejora_progresiva(self):
         producto = crear_producto_con_stock(nombre="Envío E2E", stock=6)
         self.agregar_producto(producto)
@@ -193,7 +217,9 @@ class CompraPublicaE2ETests(BrowserE2ETestCase):
             pagina_sin_js.get_by_label("Localidad").fill("Posadas")
             pagina_sin_js.get_by_label("Provincia").fill("Misiones")
             pagina_sin_js.get_by_label("Referencias").fill("Portón verde")
-            pagina_sin_js.get_by_role("button", name="Confirmar Pedido").click()
+            pagina_sin_js.get_by_role(
+                "button", name="Confirmar Pedido"
+            ).click()
             expect(
                 pagina_sin_js.get_by_role(
                     "heading", name="¡Gracias por tu compra!"

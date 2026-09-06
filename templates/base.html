@@ -13,19 +13,32 @@
     <header class="site-header">
         <div class="site-header__inner">
             <a class="brand" href="{% url 'catalog:producto_list' %}" aria-label="Yerbas Coronado, inicio">
-                <span class="brand__mark" aria-hidden="true">YC</span>
-                <span class="brand__name">Yerbas Coronado</span>
+                <img src="{% static 'catalog/images/logo.png' %}" alt="Logo de Yerbas Coronado">
             </a>
             <div class="site-header__actions">
-                <form class="site-search" action="{% url 'catalog:producto_list' %}" method="get" role="search">
+                <form id="site-search-form" class="site-search" action="{% url 'catalog:producto_list' %}" method="get" role="search">
                     <label class="visually-hidden" for="site-search">Buscar productos</label>
-                    <input id="site-search" name="q" type="search" value="{{ busqueda|default:'' }}" placeholder="Buscar productos">
-                    <button type="submit" aria-label="Buscar productos"><span aria-hidden="true">⌕</span></button>
+                    <input id="site-search" name="q" type="search" value="{{ busqueda|default:'' }}" placeholder="Buscar productos o marcas">
+                    <button class="site-search__submit" type="submit" aria-label="Buscar productos">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="m20 20-4-4"></path>
+                        </svg>
+                    </button>
                 </form>
+                <button class="site-search-toggle" type="button" aria-controls="site-search-form" aria-expanded="false" aria-label="Abrir buscador">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-4-4"></path>
+                    </svg>
+                </button>
                 <nav aria-label="Carrito">
                     {% with cantidad=cart_resumen_global.cantidad_total_unidades %}
-                        <a class="cart-link" href="{% url 'cart:detalle' %}" aria-label="Carrito, {{ cantidad }} {% if cantidad == 1 %}unidad{% else %}unidades{% endif %}">
-                            <span class="cart-link__label">Carrito</span>
+                        <a class="cart-link" href="{% url 'cart:detalle' %}" aria-label="Ver carrito. {{ cantidad }} {% if cantidad == 1 %}unidad{% else %}unidades{% endif %}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 8h12l1 12H5L6 8Z"></path>
+                                <path d="M9 9V6a3 3 0 0 1 6 0v3"></path>
+                            </svg>
                             <span class="cart-count" aria-hidden="true">{{ cantidad }}</span>
                         </a>
                     {% endwith %}
@@ -44,21 +57,36 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="site-footer">
-        <div class="site-footer__inner">
-            <div class="footer-brand">
-                <span class="footer-brand__mark" aria-hidden="true">YC</span>
-                <div><p class="footer-brand__name">Yerbas Coronado</p><p>Yerba mate para compartir</p></div>
-            </div>
-            <div class="footer-contact">
-                <p class="footer-heading">Encontranos</p>
-                <div class="footer-socials" aria-label="Canales de contacto">
-                    <span>Instagram</span><span>TikTok</span>
-                    {% if whatsapp_mayorista_url %}<a href="{{ whatsapp_mayorista_url }}" rel="noreferrer" referrerpolicy="no-referrer">WhatsApp</a>{% else %}<span>WhatsApp</span>{% endif %}
+        <div class="site-footer__main">
+            <div class="site-footer__inner">
+                <div class="footer-brand">
+                    <a class="footer-brand__logo" href="{% url 'catalog:producto_list' %}" aria-label="Yerbas Coronado, inicio">
+                        <img src="{% static 'catalog/images/logo.png' %}" alt="Logo de Yerbas Coronado">
+                    </a>
+                    <p>Yerbas seleccionadas para cada mate.</p>
                 </div>
+                <nav class="footer-socials" aria-label="Redes sociales y contacto">
+                    <a href="https://www.instagram.com/yerba.coronado/" target="_blank" rel="noopener noreferrer" aria-label="Visitar Instagram de Yerbas Coronado">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"></circle></svg>
+                    </a>
+                    <a href="https://www.tiktok.com/@yerbacoronado" target="_blank" rel="noopener noreferrer" aria-label="Visitar TikTok de Yerbas Coronado">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4v11.2a4.7 4.7 0 1 1-4-4.6"></path><path d="M15 4c.7 3 2.5 4.7 5 5"></path></svg>
+                    </a>
+                    {% if whatsapp_contacto_url %}
+                        <a href="{{ whatsapp_contacto_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Contactar a Yerbas Coronado por WhatsApp">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.6a8 8 0 0 1-11.8 7L4 20l1.4-4A8 8 0 1 1 20 11.6Z"></path><path d="M9 8.5c.3 2.8 2.2 4.7 5 5l1-1.2 2 .9c-.2 1.5-1.2 2.3-2.6 2.3-4 0-7-3-7-7 0-1.4.8-2.4 2.3-2.6l.9 2-1.1 1Z"></path></svg>
+                        </a>
+                    {% else %}
+                        <span class="footer-socials__disabled" aria-disabled="true" aria-label="Contactar a Yerbas Coronado por WhatsApp, no disponible">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.6a8 8 0 0 1-11.8 7L4 20l1.4-4A8 8 0 1 1 20 11.6Z"></path><path d="M9 8.5c.3 2.8 2.2 4.7 5 5l1-1.2 2 .9c-.2 1.5-1.2 2.3-2.6 2.3-4 0-7-3-7-7 0-1.4.8-2.4 2.3-2.6l.9 2-1.1 1Z"></path></svg>
+                        </span>
+                    {% endif %}
+                </nav>
             </div>
         </div>
-        <p class="site-footer__copyright">© {% now "Y" %} Yerbas Coronado</p>
+        <div class="site-footer__wood"><p>© {% now "Y" %} Yerbas Coronado. Todos los derechos reservados.</p></div>
     </footer>
+    <script src="{% static 'catalog/header.js' %}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

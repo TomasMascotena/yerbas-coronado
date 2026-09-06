@@ -165,7 +165,10 @@ class MetodosSesionYCatalogoTests(TestCase):
         )
         self.assertContains(
             respuesta,
-            f"Agregar {disponible.nombre}, presentación {disponible.peso} al Carrito",
+            (
+                f"Agregar {disponible.nombre}, presentación "
+                f"{disponible.peso} al carrito"
+            ),
         )
         self.assertNotContains(respuesta, "5 unidades disponibles")
 
@@ -197,7 +200,7 @@ class MetodosSesionYCatalogoTests(TestCase):
     def test_indicador_global_muestra_cero_unidades(self):
         respuesta = self.client.get(reverse("catalog:producto_list"))
 
-        self.assertContains(respuesta, "Carrito, 0 unidades")
+        self.assertContains(respuesta, "Ver carrito. 0 unidades")
         self.assertNotIn(settings.SESSION_COOKIE_NAME, self.client.cookies)
 
     def test_indicador_global_utiliza_singular_para_una_unidad(self):
@@ -208,8 +211,8 @@ class MetodosSesionYCatalogoTests(TestCase):
         )
         respuesta = self.client.get(reverse("catalog:producto_list"))
 
-        self.assertContains(respuesta, "Carrito, 1 unidad")
-        self.assertNotContains(respuesta, "Carrito, 1 unidades")
+        self.assertContains(respuesta, "Ver carrito. 1 unidad")
+        self.assertNotContains(respuesta, "Ver carrito. 1 unidades")
 
     def test_indicador_global_muestra_varias_unidades_en_catalogo(self):
         producto = crear_producto_con_stock(stock=5)
@@ -224,7 +227,7 @@ class MetodosSesionYCatalogoTests(TestCase):
 
         respuesta = self.client.get(reverse("catalog:producto_list"))
 
-        self.assertContains(respuesta, "Carrito, 3 unidades")
+        self.assertContains(respuesta, "Ver carrito. 3 unidades")
 
     def test_producto_inexistente_e_inactivo_tienen_mensaje_funcional_generico(self):
         inactivo = crear_producto_con_stock(nombre="Inactivo", stock=5)
@@ -277,7 +280,7 @@ class CarritoPresentacionYPricingTests(TestCase):
         self.assertContains(respuesta, "Precio unitario")
         self.assertContains(respuesta, "$ 5.000,00")
         self.assertContains(respuesta, "$ 10.000,00")
-        self.assertContains(respuesta, "Carrito, 2 unidades")
+        self.assertContains(respuesta, "Ver carrito. 2 unidades")
         self.assertEqual(respuesta.content.count(b"<h1"), 1)
         self.assertContains(respuesta, "Resumen del Carrito")
         self.assertContains(respuesta, "Actualizar cantidad de")
@@ -331,7 +334,7 @@ class CarritoPresentacionYPricingTests(TestCase):
                 unidad = "unidad" if cantidad == 1 else "unidades"
                 self.assertContains(
                     respuesta,
-                    f"Carrito, {cantidad} {unidad}",
+                    f"Ver carrito. {cantidad} {unidad}",
                 )
 
     def test_cambio_de_precios_actuales_no_reemplaza_snapshots(self):
@@ -616,6 +619,195 @@ class OperacionesPublicasTests(TestCase):
         inventario.refresh_from_db()
         self.assertEqual(inventario.cantidad_disponible, stock)
         self.assertEqual(MovimientoInventario.objects.count(), movimientos)
+
+
+@override_settings(MEDIA_ROOT=MEDIA_ROOT_PRUEBAS)
+class OperacionesAsincronasCatalogoTests(TestCase):
+    cabecera = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+    def test_ciclo_agregar_incrementar_reducir_y_eliminar(self):
+        producto = crear_producto_con_stock(stock=5)
+        agregar_url = reverse("cart:agregar_producto", args=(producto.pk,))
+
+        agregada = self.client.post(agregar_url, **self.cabecera)
+        self.assertEqual(agregada.status_code, 200)
+        self.assertEqual(agregada.json()["cart_quantity"], 1)
+        self.assertIn(
+            'value="1" data-confirmed-value="1"',
+            agregada.json()["control_html"],
+        )
+        item = ItemCarrito.objects.get()
+
+        incrementada = self.client.post(agregar_url, **self.cabecera)
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 2)
+        self.assertEqual(incrementada.json()["cart_label"], "Ver carrito. 2 unidades")
+        self.assertIn(
+            'value="2" data-confirmed-value="2"',
+            incrementada.json()["control_html"],
+        )
+
+        reducida = self.client.post(
+            reverse("cart:establecer_cantidad", args=(item.pk,)),
+            {"cantidad": 1},
+            **self.cabecera,
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 1)
+        self.assertEqual(reducida.json()["cart_quantity"], 1)
+
+        eliminada = self.client.post(
+            reverse("cart:eliminar_item", args=(item.pk,)),
+            **self.cabecera,
+        )
+        self.assertFalse(ItemCarrito.objects.exists())
+        self.assertEqual(eliminada.json()["cart_quantity"], 0)
+        self.assertIn(">Agregar</button>", eliminada.json()["control_html"])
+
+    def test_error_de_stock_sincroniza_el_control_confirmado(self):
+        producto = crear_producto_con_stock(stock=1)
+        agregar_url = reverse("cart:agregar_producto", args=(producto.pk,))
+        self.client.post(agregar_url, **self.cabecera)
+
+        respuesta = self.client.post(agregar_url, **self.cabecera)
+
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertFalse(respuesta.json()["ok"])
+        self.assertEqual(
+            respuesta.json()["message"],
+            "No hay más unidades disponibles.",
+        )
+        self.assertIn("disabled", respuesta.json()["control_html"])
+        self.assertEqual(ItemCarrito.objects.get().cantidad, 1)
+
+    def test_producto_inactivo_es_rechazado_y_solicita_retirar_tarjeta(self):
+        producto = crear_producto_con_stock(stock=5)
+        producto.activo = False
+        producto.save(update_fields=("activo",))
+
+        respuesta = self.client.post(
+            reverse("cart:agregar_producto", args=(producto.pk,)),
+            **self.cabecera,
+        )
+
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertFalse(respuesta.json()["ok"])
+        self.assertTrue(respuesta.json()["remove_card"])
+        self.assertFalse(ItemCarrito.objects.exists())
+
+    def test_cantidad_invalida_devuelve_json_sin_modificar_item(self):
+        producto = crear_producto_con_stock(stock=5)
+        self.client.post(
+            reverse("cart:agregar_producto", args=(producto.pk,)),
+            **self.cabecera,
+        )
+        item = ItemCarrito.objects.get()
+
+        respuesta = self.client.post(
+            reverse("cart:establecer_cantidad", args=(item.pk,)),
+            {"cantidad": -1},
+            **self.cabecera,
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertFalse(respuesta.json()["ok"])
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 1)
+
+    def test_cantidad_editable_establece_cuarenta_y_normaliza_ceros(self):
+        producto = crear_producto_con_stock(stock=50)
+        self.client.post(
+            reverse("cart:agregar_producto", args=(producto.pk,)),
+            **self.cabecera,
+        )
+        item = ItemCarrito.objects.get()
+        url = reverse("cart:establecer_cantidad", args=(item.pk,))
+
+        respuesta = self.client.post(
+            url,
+            {"cantidad": "0040", "catalog_control": "1"},
+            **self.cabecera,
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 40)
+        self.assertEqual(respuesta.json()["cart_quantity"], 40)
+        self.assertEqual(respuesta.json()["cart_label"], "Ver carrito. 40 unidades")
+        self.assertIn('value="40" data-confirmed-value="40"', respuesta.json()["control_html"])
+
+    def test_cantidad_editable_cero_elimina_item(self):
+        producto = crear_producto_con_stock(stock=5)
+        self.client.post(
+            reverse("cart:agregar_producto", args=(producto.pk,)),
+            **self.cabecera,
+        )
+        item = ItemCarrito.objects.get()
+
+        respuesta = self.client.post(
+            reverse("cart:establecer_cantidad", args=(item.pk,)),
+            {"cantidad": 0, "catalog_control": "1"},
+            **self.cabecera,
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(ItemCarrito.objects.exists())
+        self.assertEqual(respuesta.json()["cart_quantity"], 0)
+        self.assertIn(">Agregar</button>", respuesta.json()["control_html"])
+
+    def test_cantidad_editable_rechaza_valores_invalidos_y_restaura_confirmada(self):
+        producto = crear_producto_con_stock(stock=50)
+        self.client.post(
+            reverse("cart:agregar_producto", args=(producto.pk,)),
+            **self.cabecera,
+        )
+        item = ItemCarrito.objects.get()
+        url = reverse("cart:establecer_cantidad", args=(item.pk,))
+
+        for valor in (-1, "1.5", "", "texto"):
+            with self.subTest(valor=valor):
+                respuesta = self.client.post(
+                    url,
+                    {"cantidad": valor, "catalog_control": "1"},
+                    **self.cabecera,
+                )
+                self.assertEqual(respuesta.status_code, 400)
+                self.assertIn(
+                    'value="1" data-confirmed-value="1"',
+                    respuesta.json()["control_html"],
+                )
+                item.refresh_from_db()
+                self.assertEqual(item.cantidad, 1)
+
+        sin_stock = self.client.post(
+            url,
+            {"cantidad": 51, "catalog_control": "1"},
+            **self.cabecera,
+        )
+        self.assertEqual(sin_stock.status_code, 409)
+        self.assertEqual(
+            sin_stock.json()["message"],
+            "No hay stock suficiente para la cantidad solicitada.",
+        )
+        self.assertIn(
+            'value="1" data-confirmed-value="1"',
+            sin_stock.json()["control_html"],
+        )
+
+    def test_cantidad_editable_cero_conserva_prg_sin_javascript(self):
+        producto = crear_producto_con_stock(stock=5)
+        agregar_url = reverse("cart:agregar_producto", args=(producto.pk,))
+        self.client.post(agregar_url)
+        item = ItemCarrito.objects.get()
+        destino = reverse("catalog:producto_list") + "#productos"
+
+        respuesta = self.client.post(
+            reverse("cart:establecer_cantidad", args=(item.pk,)),
+            {"cantidad": 0, "catalog_control": "1", "next": destino},
+        )
+
+        self.assertRedirects(respuesta, destino, fetch_redirect_response=False)
+        self.assertFalse(ItemCarrito.objects.exists())
 
 
 @override_settings(MEDIA_ROOT=MEDIA_ROOT_PRUEBAS, DEBUG=False)

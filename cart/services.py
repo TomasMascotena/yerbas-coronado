@@ -259,6 +259,7 @@ def establecer_cantidad_item(*, session_key, item_id, cantidad):
 def eliminar_item(*, session_key, item_id):
     _validar_session_key(session_key)
     carrito_no_disponible = False
+    producto_id = None
     with transaction.atomic():
         carrito = _obtener_carrito_vigente_bloqueado(session_key)
         if carrito is None or carrito is _CARRITO_EXPIRADO:
@@ -268,11 +269,13 @@ def eliminar_item(*, session_key, item_id):
                 carrito=carrito,
                 item_id=item_id,
             )
+            producto_id = item.producto_id
             item.delete()
             _actualizar_actividad_y_token(carrito, ahora=_ahora())
 
     if carrito_no_disponible:
         raise ItemCarritoNoEncontrado("La sesión no posee ese Item.")
+    return producto_id
 
 
 @transaction.atomic
