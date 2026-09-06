@@ -12,6 +12,10 @@ Se requieren tres niveles complementarios:
 2. recuperación a un punto en el tiempo si el producto/plan la ofrece;
 3. `pg_dump` periódico cifrado y almacenado fuera de Railway.
 
+Las imágenes requieren además un inventario periódico de objetos y una copia
+fuera del bucket de producción. La restauración de base y bucket debe conservar
+los nombres almacenados en `catalog_producto.imagen`.
+
 La disponibilidad y retención de backups/PITR cambia por plan: verificarla en
 la [documentación oficial de PostgreSQL de Railway](https://docs.railway.com/databases/postgresql)
 antes de contratar. Un backup no se considera válido hasta restaurarlo.
@@ -64,9 +68,11 @@ tráfico.
 2. Detener nuevas escrituras.
 3. Crear PostgreSQL privado en Render y restaurar el dump.
 4. Aplicar únicamente migraciones versionadas con `migrate --noinput`.
-5. Configurar secretos y ejecutar checks/smoke tests en el servicio nuevo.
-6. Comparar conteos críticos y probar historial, stock y checkout.
-7. Cambiar DNS; conservar Railway durante la ventana de rollback.
+5. Conservar el bucket actual o copiar sus objetos a un backend S3-compatible y
+   configurar las cinco variables `AWS_*` del servicio nuevo.
+6. Configurar secretos y ejecutar checks/smoke tests en el servicio nuevo.
+7. Comparar conteos críticos y probar historial, stock, imágenes y checkout.
+8. Cambiar DNS; conservar Railway durante la ventana de rollback.
 
 ## Incidentes y monitoreo
 

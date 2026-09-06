@@ -10,6 +10,7 @@ continúa en beta y todavía no cubre de forma estable el pre-deploy requerido.
 
 - servicio web Django, construido desde GitHub;
 - servicio PostgreSQL separado y accesible por red privada;
+- bucket privado S3-compatible para las imágenes de Producto;
 - build: `docker build` ejecuta `python manage.py collectstatic --noinput`;
 - pre-deploy: `python manage.py migrate --noinput`;
 - start: `gunicorn config.wsgi:application --config gunicorn.conf.py`;
@@ -24,20 +25,23 @@ publicar la versión. Registrar esos valores en la revisión de cada deployment.
 
 ## 1. Preparar y conectar servicios
 
-1. Obtener aprobación de presupuesto y almacenamiento de imágenes.
-2. Crear un proyecto vacío en Railway y conectar el repositorio GitHub.
-3. Seleccionar la rama aprobada y confirmar que Railway detecte `Dockerfile`.
-4. Agregar PostgreSQL como servicio separado. No habilitar acceso público salvo
+1. Crear un proyecto vacío en Railway y conectar el repositorio GitHub.
+2. Seleccionar la rama aprobada y confirmar que Railway detecte `Dockerfile`.
+3. Agregar PostgreSQL como servicio separado. No habilitar acceso público salvo
    una operación temporal y justificada.
+4. Agregar un Storage Bucket privado en la misma región que la aplicación.
 5. En el servicio web, crear referencias `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
    `PGHOST` y `PGPORT` hacia las variables del servicio PostgreSQL.
-6. Completar la matriz de [variables](VARIABLES_ENTORNO.md) en el gestor de
+6. Crear referencias desde el servicio web a `ACCESS_KEY_ID`,
+   `SECRET_ACCESS_KEY`, `BUCKET`, `ENDPOINT` y `REGION` del bucket, usando los
+   nombres Django documentados en la matriz de variables.
+7. Completar la matriz de [variables](VARIABLES_ENTORNO.md) en el gestor de
    secretos de Railway. Generar `DJANGO_SECRET_KEY` localmente con un generador
    criptográfico y pegarla directamente en el gestor.
-7. Definir `DJANGO_ALLOWED_HOSTS` con el hostname Railway, y
+8. Definir `DJANGO_ALLOWED_HOSTS` con el hostname Railway, y
    `healthcheck.railway.app`; definir `DJANGO_CSRF_TRUSTED_ORIGINS` con el
    origen HTTPS público completo. El host de health check no es un origen CSRF.
-8. Configurar `DJANGO_TRUST_X_FORWARDED_PROTO=true` solo después de confirmar
+9. Configurar `DJANGO_TRUST_X_FORWARDED_PROTO=true` solo después de confirmar
    que Railway termina HTTPS y reemplaza el encabezado del cliente.
 
 Railway detecta el Dockerfile en repositorios GitHub según su
@@ -65,27 +69,24 @@ para que ese sondeo pueda obtener `200`, pero no exponen datos ni escrituras.
 
 Crear el superusuario desde una consola efímera con
 `python manage.py createsuperuser`, introduciendo la contraseña en el prompt.
-No usar variables versionadas ni comandos que incluyan la contraseña. Antes de
-crear Productos, resolver el bloqueo de media explicado abajo. Los ingresos de
-stock deben usar los casos de uso administrativos existentes.
+No usar variables versionadas ni comandos que incluyan la contraseña. Los
+ingresos de stock deben usar los casos de uso administrativos existentes.
 
 ## Estáticos y media
 
 WhiteNoise sirve únicamente el resultado versionado y comprimido de
-`collectstatic`; nunca sirve `MEDIA_ROOT`. `STATIC_ROOT=staticfiles/` y
-`MEDIA_ROOT=media/` permanecen separados.
+`collectstatic`. Las imágenes de Producto usan un bucket privado S3-compatible
+mediante `django-storages`; Django genera URLs firmadas con una hora de validez.
 
-No hay imágenes de Producto versionadas actualmente. Una imagen cargada desde
-Admin se escribiría en el filesystem del contenedor y se perdería al reemplazar
-la instancia. Por eso queda **bloqueado el lanzamiento comercial y toda carga
-administrativa de imágenes** hasta elegir e integrar almacenamiento persistente
-(S3 compatible, Cloudinary u otro backend externo).
+La carga desde Admin escribe directamente en el bucket y sobrevive reinicios,
+nuevos deployments y escalado horizontal. Los nombres no se sobrescriben y las
+credenciales permanecen únicamente en variables referenciadas desde Railway.
+Comprobar después del primer despliegue que una imagen puede cargarse, verse en
+catálogo y continuar disponible tras reiniciar el servicio.
 
-Para una validación temporal sin Productos puede usarse una base vacía y no
-habilitar acceso administrativo. Si fuera imprescindible validar imágenes, se
-requiere una decisión explícita previa; una opción transitoria es un volumen
-persistente montado en `media/`, con backup propio, una sola réplica y aceptación
-documentada de sus límites. No tratar ese volumen como solución definitiva.
+Railway documenta sus buckets como S3-compatible y privados. Si cambia el
+servidor web, conservar estas variables o migrar los objetos a otro proveedor
+S3-compatible antes del corte.
 
 ## Dominio y HTTPS
 
@@ -134,7 +135,8 @@ para PostgreSQL.
 - revisar logs sin datos personales, tokens, cuerpos ni credenciales;
 - ejecutar `python -m pip_audit -r requirements.txt` y resolver hallazgos antes
   de publicar;
-- no habilitar cargas de imágenes mientras siga pendiente el backend externo.
+- mantener privado el bucket, rotar sus credenciales ante exposición y probar
+  la persistencia de imágenes después de cada cambio de almacenamiento.
 
 El workflow CI verifica configuración, migraciones, suite tradicional, E2E,
 estáticos, Gunicorn, build del contenedor, configuración productiva simulada,
@@ -157,7 +159,8 @@ no haya una migración activa. Esta acción requiere autorización operativa.
 ## Portabilidad a Render
 
 Crear servicios web/PostgreSQL equivalentes, mapear la misma matriz de entorno,
-ejecutar `collectstatic` en build, `migrate --noinput` antes de publicar y usar
-el mismo comando Gunicorn y health check. Restaurar un dump probado, cambiar
+conservar el bucket o migrar sus objetos a otro S3-compatible, ejecutar
+`collectstatic` en build, `migrate --noinput` antes de publicar y usar el mismo
+comando Gunicorn y health check. Restaurar un dump probado, cambiar
 hosts/orígenes, validar HTTPS y recién entonces cortar DNS. Ninguna regla de la
 aplicación depende de APIs de Railway.

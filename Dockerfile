@@ -19,6 +19,11 @@ RUN DJANGO_ENV=production \
     POSTGRES_PASSWORD=build_only \
     POSTGRES_HOST=localhost \
     POSTGRES_PORT=5432 \
+    AWS_ACCESS_KEY_ID=build-only \
+    AWS_SECRET_ACCESS_KEY=build-only \
+    AWS_STORAGE_BUCKET_NAME=build-only \
+    AWS_S3_ENDPOINT_URL=https://storage.example.test \
+    AWS_S3_REGION_NAME=auto \
     DJANGO_SECURE_HSTS_SECONDS=3600 \
     python manage.py collectstatic --noinput
 

@@ -232,3 +232,19 @@ confirmación permanecen disponibles, pero no se muestra el enlace de WhatsApp.
 La interfaz puede utilizar JavaScript como mejora progresiva para mostrar u
 ocultar los campos de Dirección de Envío. El formulario completo permanece
 utilizable sin JavaScript y toda validación definitiva continúa en el servidor.
+
+## DI-017 — Persistencia de imágenes en producción
+
+**Estado:** Aprobada
+
+Las imágenes de Producto se almacenan en producción en un bucket privado
+S3-compatible. Django accede al bucket mediante credenciales del entorno y
+genera URLs firmadas temporales para su presentación pública.
+
+El desarrollo y las pruebas conservan almacenamiento local. Los archivos
+estáticos permanecen separados y son servidos por WhiteNoise.
+
+Esta decisión evita depender del filesystem efímero o de una única réplica del
+servidor web. El backend usa el protocolo S3 estándar para que un cambio futuro
+de servidor o proveedor de objetos no modifique las entidades ni las reglas del
+dominio; solo requiere migrar los objetos y reemplazar variables de entorno.

@@ -19,6 +19,11 @@ servicio de base de datos, no copiarse manualmente.
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` | Alternativa¹ | Valores locales ficticios | Desarrollo, tests u otros proveedores | Contraseña: sí | Igual que las variables `PG*` equivalentes |
 | `POSTGRES_CONN_MAX_AGE` | No | `60` | Operador / producción | No | Ajustar con métricas; `60` es el default productivo |
 | `POSTGRES_SSLMODE` | Según conexión | `require` | Operador / producción | No | Revisar al cambiar red/proveedor; usar `verify-full` si hay CA y hostname verificables |
+| `AWS_ACCESS_KEY_ID` | Sí | `${{Bucket.ACCESS_KEY_ID}}` | Referencia al bucket / producción | Sí | Rotar desde el bucket y actualizar la referencia |
+| `AWS_SECRET_ACCESS_KEY` | Sí | `${{Bucket.SECRET_ACCESS_KEY}}` | Referencia al bucket / producción | Sí | Rotar desde el bucket y redesplegar |
+| `AWS_STORAGE_BUCKET_NAME` | Sí | `${{Bucket.BUCKET}}` | Referencia al bucket / producción | No | Actualizar al migrar objetos a otro bucket |
+| `AWS_S3_ENDPOINT_URL` | Sí | `${{Bucket.ENDPOINT}}` | Referencia al bucket / producción | No | Actualizar al cambiar proveedor S3-compatible |
+| `AWS_S3_REGION_NAME` | Sí | `${{Bucket.REGION}}` | Referencia al bucket / producción | No | Actualizar al cambiar región o proveedor |
 | `WHATSAPP_BUSINESS_NUMBER` | No | `5491100000000` | Administradora / producción | No | Cambiar al rotar el número comercial |
 | `DJANGO_LOG_LEVEL` | No | `INFO` | Operador / producción | No | Ajustar temporalmente; `DEBUG` está prohibido |
 | `DJANGO_SECURE_HSTS_SECONDS` | No | `3600` | Operador / producción | No | Aumentar gradualmente tras validar HTTPS |
@@ -40,3 +45,7 @@ mantener validación campo por campo.
 El dominio personalizado futuro no es un secreto ni una variable consumida
 directamente. Sus valores se incorporarán a `DJANGO_ALLOWED_HOSTS` y
 `DJANGO_CSRF_TRUSTED_ORIGINS` cuando exista una decisión de dominio y DNS.
+
+`Bucket` representa el nombre del servicio de Storage Bucket dentro de
+Railway; si se lo renombra, ajustar el prefijo de las referencias. Las cinco
+variables `AWS_*` forman un juego obligatorio completo en producción.
