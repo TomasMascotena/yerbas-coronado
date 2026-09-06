@@ -14,3 +14,10 @@ class EstablecerCantidadItemForm(forms.Form):
             }
         ),
     )
+
+
+class EstablecerCantidadCatalogoForm(forms.Form):
+    cantidad = forms.IntegerField(
+        min_value=0,
+        max_value=2_147_483_647,
+    )

@@ -166,7 +166,7 @@ class ConfirmacionPublicaTests(TestCase):
         self.assertContains(respuesta, "Portón verde")
         self.assertContains(respuesta, "El costo de envío se coordina posteriormente")
 
-    @override_settings(WHATSAPP_BUSINESS_NUMBER="5491112345678")
+    @override_settings(WHATSAPP_BUSINESS_NUMBER="5492664933059")
     def test_whatsapp_codifica_snapshots_omite_dni_y_protege_referrer(self):
         pedido, _ = self.crear_pedido(envio=True)
 
@@ -176,7 +176,7 @@ class ConfirmacionPublicaTests(TestCase):
 
         enlace = respuesta.context["enlace_whatsapp"]
         mensaje = parse_qs(urlparse(enlace).query)["text"][0]
-        self.assertTrue(enlace.startswith("https://wa.me/5491112345678?text="))
+        self.assertTrue(enlace.startswith("https://wa.me/5492664933059?text="))
         self.assertIn(pedido.numero_pedido, mensaje)
         self.assertIn(pedido.telefono_cliente, mensaje)
         self.assertIn("Dirección: San Martín 123", mensaje)
@@ -283,5 +283,5 @@ class ConfirmacionPublicaTests(TestCase):
             reverse("orders:confirmacion", args=(pedido.numero_pedido,))
         )
 
-        self.assertContains(respuesta, "Carrito, 1 unidad")
+        self.assertContains(respuesta, "Ver carrito. 1 unidad")
         self.assertTrue(Carrito.objects.filter(session_key=self.client.session.session_key).exists())

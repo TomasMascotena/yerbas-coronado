@@ -103,7 +103,7 @@ class CatalogoPublicoTests(TestCase):
         self.assertEqual(list(respuesta.context["productos"]), [])
         self.assertContains(
             respuesta,
-            "No hay Productos publicados en este momento.",
+            "No hay productos disponibles en este momento.",
         )
         self.assertNotContains(respuesta, 'aria-label="Catálogo de productos"')
 
@@ -149,38 +149,27 @@ class CatalogoPublicoTests(TestCase):
         )
 
         self.assertContains(listado, producto.nombre)
-        self.assertContains(listado, "Sin Stock")
+        self.assertContains(listado, "Sin stock")
         self.assertContains(detalle, "Sin Stock")
 
-    def test_tarjeta_muestra_peso_imagen_y_navegacion_accesible(self):
+    def test_tarjeta_muestra_peso_e_imagen_sin_enlace_de_ficha(self):
         producto = self.crear_producto(
             nombre="Canarias Tradicional",
             peso="1 kg",
         )
-        url_detalle = reverse("catalog:producto_detail", args=(producto.pk,))
-
         respuesta = self.client.get(reverse("catalog:producto_list"))
 
         self.assertContains(respuesta, ">1 kg<")
         self.assertContains(respuesta, f'src="{producto.imagen.url}"')
         self.assertContains(
             respuesta,
-            'alt="Producto Canarias Tradicional, presentación 1 kg"',
+            'alt="Canarias Tradicional, 1 kg"',
         )
         self.assertContains(
             respuesta,
             'aria-label="Catálogo de productos"',
         )
-        self.assertContains(respuesta, f'href="{url_detalle}"')
-        self.assertContains(
-            respuesta,
-            (
-                f'<a class="detail-link" href="{url_detalle}" '
-                'aria-label="Ver Canarias Tradicional, presentación 1 kg">'
-                "Ver producto</a>"
-            ),
-            html=True,
-        )
+        self.assertNotContains(respuesta, 'class="detail-link"')
 
     def test_detalle_muestra_peso_imagen_y_enlace_de_regreso(self):
         producto = self.crear_producto(
@@ -207,14 +196,15 @@ class CatalogoPublicoTests(TestCase):
     def test_producto_con_stock_se_muestra_disponible_sin_exponer_cantidad(self):
         producto = self.crear_producto(stock=987654)
 
-        for url in (
-            reverse("catalog:producto_list"),
-            reverse("catalog:producto_detail", args=(producto.pk,)),
-        ):
-            with self.subTest(url=url):
-                respuesta = self.client.get(url)
-                self.assertContains(respuesta, "Disponible")
-                self.assertNotContains(respuesta, "987654")
+        listado = self.client.get(reverse("catalog:producto_list"))
+        detalle = self.client.get(
+            reverse("catalog:producto_detail", args=(producto.pk,))
+        )
+
+        self.assertNotContains(listado, "Disponible")
+        self.assertContains(detalle, "Disponible")
+        self.assertNotContains(listado, "987654")
+        self.assertNotContains(detalle, "987654")
 
     def test_listado_y_detalle_muestran_las_tres_escalas_en_ars(self):
         producto = self.crear_producto(
